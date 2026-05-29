@@ -61,7 +61,6 @@ func TestPackageJSONPublishingMetadata(t *testing.T) {
 		} `json:"config"`
 		PublishConfig struct {
 			Registry string `json:"registry"`
-			Access   string `json:"access"`
 		} `json:"publishConfig"`
 		Repository struct {
 			Type string `json:"type"`
@@ -78,11 +77,8 @@ func TestPackageJSONPublishingMetadata(t *testing.T) {
 	if !validPackageVersion(manifest.Version) {
 		t.Fatalf("package version = %q, want valid semver", manifest.Version)
 	}
-	if manifest.PublishConfig.Registry != "https://registry.npmjs.org/" {
-		t.Fatalf("publish registry = %q, want https://registry.npmjs.org/", manifest.PublishConfig.Registry)
-	}
-	if manifest.PublishConfig.Access != "public" {
-		t.Fatalf("publish access = %q, want public", manifest.PublishConfig.Access)
+	if manifest.PublishConfig.Registry != "https://nexus.qtech.cn/repository/npm-hosted/" {
+		t.Fatalf("publish registry = %q, want https://nexus.qtech.cn/repository/npm-hosted/", manifest.PublishConfig.Registry)
 	}
 	if manifest.Config.BinaryName != "contract-cli" {
 		t.Fatalf("binary name = %q, want contract-cli", manifest.Config.BinaryName)

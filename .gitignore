@@ -1,5 +1,7 @@
 # Local root build outputs
 .DS_Store
+/.npmrc
+/node_modules/
 /contract-cli
 /bin/
 /dist/

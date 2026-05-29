@@ -46,13 +46,13 @@ contract-cli --version
 
 - 本地源码仓库内执行 `npm install` 时，如果检测到 Go 源码，会回退到本地 `go build`
 - 以后发布到 npm 后，安装脚本会优先下载预编译二进制
-- npm 发布配置固定为 `https://registry.npmjs.org/` 和 public access
+- npm 发布配置固定为内部 Nexus：`https://nexus.qtech.cn/repository/npm-hosted/`
 - 预编译二进制默认从 GitHub Releases 下载：`https://github.com/qfeius/contract-cli/releases/download/v{version}`
 
 示例：
 
 ```bash
-NPM_CONFIG_REGISTRY=https://registry.npmjs.org npm install -g @qfeius/contract-cli@latest
+NPM_CONFIG_REGISTRY=https://nexus.qtech.cn/repository/npm-hosted/ npm install -g @qfeius/contract-cli@latest
 contract-cli --version
 npx skills add qfeius/contract-cli -y -g
 ```

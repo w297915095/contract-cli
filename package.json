@@ -1,6 +1,6 @@
 {
   "name": "@qfeius/contract-cli",
-  "version": "1.0.1",
+  "version": "0.3.3-beta.1",
   "description": "CLI for Qfei contract open platform",
   "bin": {
     "contract-cli": "scripts/run.js"
@@ -31,8 +31,7 @@
     "url": "git+https://github.com/qfeius/contract-cli.git"
   },
   "publishConfig": {
-    "registry": "https://registry.npmjs.org/",
-    "access": "public"
+    "registry": "https://nexus.qtech.cn/repository/npm-hosted/"
   },
   "license": "UNLICENSED",
   "files": [
@@ -46,5 +45,6 @@
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
-  ]
+  ],
+  "packageManager": "pnpm@11.4.0+sha512.f0febc7e37552ab485494a914241b338e0b3580b93d54ce31f00933015880863129038a1b4ae4e414a0ee63ac35bf21197e990172c4a68256450b5636310968f"
 }
