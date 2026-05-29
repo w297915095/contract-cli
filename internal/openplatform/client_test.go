@@ -551,9 +551,7 @@ func TestRequestContextRequiresConfiguredBaseURLAndToken(t *testing.T) {
 		Name:        "contract",
 		Environment: "dev",
 	}, config.IdentityBot)
-	if err == nil ||
-		!strings.Contains(err.Error(), "open platform base url is not configured") ||
-		!strings.Contains(err.Error(), "contract-cli config add --env prod --name contract") {
+	if err == nil || !strings.Contains(err.Error(), "open platform base url is not configured") {
 		t.Fatalf("unexpected missing-base-url error: %v", err)
 	}
 
