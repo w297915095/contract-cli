@@ -105,6 +105,16 @@ func (p parsedArgs) Bool(name string) bool {
 	return p.bools[name]
 }
 
+func (p parsedArgs) HasBool(name string) bool {
+	_, ok := p.bools[name]
+	return ok
+}
+
+func (p parsedArgs) HasValue(name string) bool {
+	_, ok := p.values[name]
+	return ok
+}
+
 func (p parsedArgs) Int(name string) (int, error) {
 	value := p.String(name)
 	if strings.TrimSpace(value) == "" {
@@ -211,7 +221,7 @@ func (a *App) openPlatformClientAndContext(profileName, identityArg, path string
 }
 
 func (a *App) renderOpenPlatformResponse(options commandOptions, response openplatform.Response) error {
-	renderer := output.NewRenderer(a.stdout)
+	renderer := output.NewRenderer(a.stdout).WithNotice(a.updateNotice)
 	if options.raw {
 		return renderer.RenderRaw(response.Body)
 	}
@@ -263,16 +273,24 @@ func resolveRawBody(options commandOptions) ([]byte, error) {
 	}
 }
 
+func resolveRequiredRawBody(options commandOptions) ([]byte, error) {
+	body, err := resolveRawBody(options)
+	if err != nil {
+		return nil, err
+	}
+	if len(body) == 0 {
+		return nil, fmt.Errorf("--input-file or --data is required")
+	}
+	return body, nil
+}
+
 func commandCommonQuery(options commandOptions) url.Values {
-	query := url.Values{}
+	query := url.Values{"user_id_type": {"user_id"}}
 	if value := strings.TrimSpace(options.userIDType); value != "" {
 		query.Set("user_id_type", value)
 	}
 	if value := strings.TrimSpace(options.userID); value != "" {
 		query.Set("user_id", value)
-	}
-	if len(query) == 0 {
-		return nil
 	}
 	return query
 }

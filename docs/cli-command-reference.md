@@ -4,13 +4,13 @@
 
 ## 当前状态
 
-- 当前只预置 `dev` 环境：`contract-cli config add --env dev`
-- `contract get`、`contract search`、`contract create`、`contract sync-user-groups`、`contract text`、`contract category list`、`contract template list`、`contract template get`、`contract template instantiate`、`mdm vendor list`、`mdm vendor get`、`mdm legal list`、`mdm legal get`、`mdm fields list` 是当前仅有的十四个同时支持 `user` 与 `bot` 的结构化业务命令
-- `contract upload-file` 当前仅支持 `--as bot`
+- 当前仅内置 `prod` 环境预设；正式包默认使用 `prod`：`contract-cli config add --env prod --name contract`
+- `contract get`、`contract search`、`contract create`、`contract sync-user-groups`、`contract text`、`contract category list`、`contract template list`、`contract template get`、`contract template instantiate`、`contract upload-file`、`mdm vendor list`、`mdm vendor get`、`mdm legal list`、`mdm legal get`、`mdm fields list` 是当前仅有的十五个同时支持 `user` 与 `bot` 的结构化业务命令
+- `contract submit`、`contract resubmit`、`contract patch`、`contract download-file`、`contract delete`、`contract print-file`、`contract share get`、`contract cooperation link get`、`contract cooperation record get` 当前仅支持 `--as bot`
 - 除上述 bot 能力外，当前其他结构化业务命令仍只支持 `--as user`
 - `bot` 目前已经支持登录、状态查看、登出、默认身份切换
 - 推荐使用 `npx skills add qfeius/contract-cli -y -g` 安装跨 Agent 平台 skills；`contract-cli skills install` 保留为 CLI 内置兜底
-- `update check` 支持手动检查 npm 远端版本；CLI 在交互终端下会每 30 分钟最多自动检查一次并提示升级
+- `update check` 支持手动检查 npm 远端版本；默认输出文本，带 `--json` 时返回飞书式 JSON；CLI 会为符合条件的普通命令按 24 小时缓存检查远端版本，并在 JSON object 输出中注入 `_notice.update`
 - 当前全部已支持命令都可以通过 `--help` 查看本地帮助，例如 `contract-cli --help`、`contract-cli contract search --help`、`contract-cli help contract upload-file`
 - `bot` 业务接口后续继续新增时，优先在本文件补充命令矩阵
 
@@ -47,7 +47,8 @@ contract-cli contract get <contract-id> --help
 - `auth login --as bot` 走 `appId + appSecret -> tenant_access_token/internal`
 - `contract ...`、`mdm ...` 结构化命令大多默认只支持 `--as user`
 - `/open-apis/contract/v1/mcp/...` 路径大多仍只支持 `--as user`
-- `contract get`、`contract search`、`contract create`、`contract sync-user-groups`、`contract text`、`contract category list`、`contract template list`、`contract template get`、`contract template instantiate`、`mdm vendor list`、`mdm vendor get`、`mdm legal list`、`mdm legal get`、`mdm fields list` 是例外：
+- `contract submit`、`contract resubmit`、`contract patch`、`contract download-file`、`contract delete`、`contract print-file`、`contract share get`、`contract cooperation link get`、`contract cooperation record get` 当前仅支持 `--as bot`
+- `contract get`、`contract search`、`contract create`、`contract sync-user-groups`、`contract text`、`contract category list`、`contract template list`、`contract template get`、`contract template instantiate`、`contract upload-file`、`mdm vendor list`、`mdm vendor get`、`mdm legal list`、`mdm legal get`、`mdm fields list` 是例外：
   - `contract get --as user` 走 MCP 路径 `/open-apis/contract/v1/mcp/contracts/{contract_id}`
   - `contract get --as bot` 走开放平台路径 `/open-apis/contract/v1/contracts/{contract_id}`
   - `--as user` 走 MCP 路径 `/open-apis/contract/v1/mcp/contracts/search`
@@ -66,6 +67,7 @@ contract-cli contract get <contract-id> --help
   - `contract template get --as bot` 走 `/open-apis/contract/v1/templates/{template_id}`
   - `contract template instantiate --as user` 走 `/open-apis/contract/v1/mcp/template_instances`
   - `contract template instantiate --as bot` 走 `POST /open-apis/contract/v1/template_instances`
+  - `contract upload-file --as user` 与 `contract upload-file --as bot` 均走 `POST /open-apis/contract/v1/files/upload`
   - `mdm vendor list --as user` 走 `/open-apis/contract/v1/mcp/vendors`
   - `mdm vendor list --as bot` 走 `/open-apis/mdm/v1/vendors`
   - `mdm vendor get --as user` 走 `/open-apis/contract/v1/mcp/vendors/{vendor_id}`
@@ -76,11 +78,11 @@ contract-cli contract get <contract-id> --help
   - `mdm legal get --as bot` 走 `/open-apis/mdm/v1/legal_entities/{legal_entity_id}`，并额外透传同名 query `legal_entity_id`
   - `mdm fields list --as user` 走 `/open-apis/contract/v1/mcp/config/config_list`
   - `mdm fields list --as bot` 走 `/open-apis/mdm/v1/config/config_list`
-- `api call` 对非 `contract/v1/mcp` 路径可以继续按 profile 默认身份或显式 `--as` 发起请求，后续 bot 接口优先从这里开始验证
+- `api call` 是预留能力，当前暂未开放使用；请优先使用已开放的结构化命令
 
 ### 通用输出
 
-结构化业务命令和 `api call` 共享这些输出参数：
+结构化业务命令共享这些输出参数：
 
 - `--output json|yaml|table`
 - `--raw`
@@ -112,10 +114,9 @@ contract-cli contract get <contract-id> --help
 当前行为：
 
 - `contract ...`、`mdm ...` 结构化命令会透传到对应底层接口
-- `api call` 也支持这两个参数
-- 传了就拼接到 query string
-- 不传就不带
-- 不做默认值补齐
+- `--user-id-type` 不传时默认拼接 `user_id_type=user_id`
+- 显式传 `--user-id-type <type>` 时会覆盖默认值
+- `--user-id` 传了就拼接到 query string，不传就不带
 - 不区分 `user` / `bot`
 - 不做命令级校验
 
@@ -130,13 +131,13 @@ contract-cli contract get <contract-id> --help
 命令：
 
 ```bash
-contract-cli config add --env dev --name contract-group
+contract-cli config add --env prod --name contract
 ```
 
 支持参数：
 
-- `--env`：当前仅支持 `dev`
-- `--name`：profile 名称，默认 `contract-group`
+- `--env`：环境预设，当前仅支持 `prod`，默认 `prod`
+- `--name`：profile 名称，默认 `contract`
 - `--resource-metadata-url`：覆盖 protected resource metadata 地址
 - `--redirect-url`：覆盖 OAuth callback 地址
 - `--scope`：覆盖默认 scope 列表
@@ -167,26 +168,32 @@ contract-cli --version
 
 ```bash
 contract-cli update check
-contract-cli update check --channel beta
 contract-cli update check --channel latest
+contract-cli update check --channel latest --json
 ```
 
 支持参数：
 
 - `--channel`：npm dist-tag；不传时根据当前版本推断，预发布版本默认检查 `beta`，稳定版本默认检查 `latest`
+- `--json`：输出飞书式结构化 JSON；默认输出文本提示
 
 执行结果：
 
 - 当前版本是 `dev`、`unknown` 或非语义化版本（例如源码 git hash）时跳过远端检查
-- 有新版本时输出当前版本、远端版本和 `npm install -g @qfeius/contract-cli@<channel> --registry https://registry.npmjs.org`
-- 无新版本时输出当前版本已是最新
+- 默认输出文本提示，和飞书 `lark-cli update --check` 的手动校验体验保持一致
+- 带 `--json` 时输出顶层 `ok`、`previous_version`、`current_version`、`latest_version`、`action`、`message` 等字段
+- 有新版本时 `action=update_available`，并额外包含 `command`，值为 `npm install -g @qfeius/contract-cli@<channel> --registry https://registry.npmjs.org`
+- 无新版本时 `action=already_up_to_date`
+- 手动 `update check --json` 不注入 `_notice.update`；`_notice.update` 只用于普通 JSON 业务命令的自动提示
 - 手动执行 `update check` 会直接访问 npm registry，并把结果写入本机 update cache
 
 自动提示：
 
-- 普通命令在交互终端下会自动检查远端版本
-- 自动检查最多每 30 分钟触发一次，缓存文件位于当前配置目录的 `update-check.json`
-- 网络失败、registry 失败或当前是 dev 构建时不会阻断原命令；自动检查失败也会按 30 分钟间隔抑制重复探测
+- 普通命令会按 24 小时缓存自动检查远端版本；命中 fresh cache 时不访问 npm registry
+- 有新版本时，仅在 JSON object 输出中注入 `_notice.update`；`--raw`、yaml、table、纯文本命令不注入
+- 成功结果会写入当前配置目录的 `update-check.json`
+- 网络失败、registry 失败或当前是 dev 构建时不会阻断原命令；自动检查失败不会写入失败缓存
+- CI 环境会跳过自动远端检查
 - 设置 `CONTRACT_CLI_NO_UPDATE_CHECK=1` 可以关闭自动检查
 
 #### `contract-cli skills list`
@@ -246,7 +253,7 @@ contract-cli skills install --force
 
 执行结果：
 
-- 复制内置 `auth`、`contract-cli-shared`、`contract-cli-contract`、`contract-cli-mdm-vendor`、`contract-cli-mdm-legal`、`contract-cli-mdm-fields`、`contract-cli-api-call` 等 skill
+- 复制内置 `auth`、`contract-cli-shared`、`contract-cli-contract`、`contract-cli-mdm-vendor`、`contract-cli-mdm-legal`、`contract-cli-mdm-fields` 等 skill
 - 保留 `SKILL.md`、`agents/openai.yaml` 和 `references/*.md`
 
 ### 2. 鉴权
@@ -260,7 +267,7 @@ contract-cli skills install --force
 命令：
 
 ```bash
-contract-cli auth login --profile contract-group --as user
+contract-cli auth login --profile contract --as user
 ```
 
 支持参数：
@@ -277,7 +284,7 @@ contract-cli auth login --profile contract-group --as user
 命令：
 
 ```bash
-contract-cli auth login --profile contract-group --as bot --app-id <id> --app-secret <secret>
+contract-cli auth login --profile contract --as bot --app-id <id> --app-secret <secret>
 ```
 
 支持参数：
@@ -300,8 +307,8 @@ contract-cli auth login --profile contract-group --as bot --app-id <id> --app-se
 命令：
 
 ```bash
-contract-cli auth status --profile contract-group --as user
-contract-cli auth status --profile contract-group --as bot
+contract-cli auth status --profile contract --as user
+contract-cli auth status --profile contract --as bot
 ```
 
 支持参数：
@@ -321,8 +328,8 @@ contract-cli auth status --profile contract-group --as bot
 命令：
 
 ```bash
-contract-cli auth logout --profile contract-group --as user
-contract-cli auth logout --profile contract-group --as bot
+contract-cli auth logout --profile contract --as user
+contract-cli auth logout --profile contract --as bot
 ```
 
 支持参数：
@@ -342,8 +349,8 @@ contract-cli auth logout --profile contract-group --as bot
 命令：
 
 ```bash
-contract-cli auth use --profile contract-group --as user
-contract-cli auth use --profile contract-group --as bot
+contract-cli auth use --profile contract --as user
+contract-cli auth use --profile contract --as bot
 ```
 
 支持参数：
@@ -351,33 +358,16 @@ contract-cli auth use --profile contract-group --as bot
 - `--profile`
 - `--as user|bot`
 
-### 3. 原始开放平台调用
+### 3. 原始开放平台调用（暂未开放）
 
-#### `contract-cli api call`
+`contract-cli api call` 是预留调试入口，当前不对外开放。
 
-用途：对开放平台任意相对路径发起原始调用，是后续验证 bot 业务接口的首选入口。
+当前行为：
 
-命令：
-
-```bash
-contract-cli api call GET /open-apis/contract/v1/mcp/config/config_list --profile contract-group --as user
-contract-cli api call POST /open-apis/xxx --profile contract-group --as bot --data '{"foo":"bar"}'
-```
-
-支持参数：
-
-- `--profile`
-- `--as`
-- `--output`
-- `--raw`
-- `--input-file`
-- `--data`
-- `--header Key: Value`，可重复传入
-
-约束：
-
-- 路径必须是相对路径，且以 `/open-apis/` 开头
-- `/open-apis/contract/v1/mcp/...` 会被强制视为 user-only
+- 执行 `contract-cli api ...` 会直接返回：`api call 暂未开放使用，请使用已开放的结构化命令`
+- 不读取 profile，不发 HTTP 请求
+- 不出现在 `contract-cli --help`、`contract-cli help` 或内置 skills 安装列表中
+- 需要开放平台能力时，请优先使用 `contract ...`、`mdm ...` 等结构化命令
 - 显式 `--as bot` 调用 `contract/v1/mcp` 路径会直接报错
 
 ### 4. 合同命令
@@ -390,6 +380,7 @@ contract-cli api call POST /open-apis/xxx --profile contract-group --as bot --da
 - `--raw`
 - 需要请求体的命令额外支持 `--input-file` / `--data`
 - `contract upload-file` 额外支持 `--file` / `--file-type` / `--file-name`
+- `contract download-file` 额外支持 `--output-file` / `--force`
 
 #### `contract-cli contract search`
 
@@ -398,9 +389,9 @@ contract-cli api call POST /open-apis/xxx --profile contract-group --as bot --da
 命令：
 
 ```bash
-contract-cli contract search --profile contract-group --as user --input-file search.json
-contract-cli contract search --profile contract-group --as bot --input-file search.json
-contract-cli contract search --profile contract-group --as bot --input-file search.json --user-id ou_xxx --user-id-type employee_id
+contract-cli contract search --profile contract --as user --input-file search.json
+contract-cli contract search --profile contract --as bot --input-file search.json
+contract-cli contract search --profile contract --as bot --input-file search.json --user-id ou_xxx --user-id-type employee_id
 ```
 
 支持参数：
@@ -431,9 +422,9 @@ contract-cli contract search --profile contract-group --as bot --input-file sear
 命令：
 
 ```bash
-contract-cli contract get <contract-id> --profile contract-group --as user
-contract-cli contract get <contract-id> --profile contract-group --as bot
-contract-cli contract get <contract-id> --profile contract-group --as bot --user-id ou_xxx --user-id-type employee_id
+contract-cli contract get <contract-id> --profile contract --as user
+contract-cli contract get <contract-id> --profile contract --as bot
+contract-cli contract get <contract-id> --profile contract --as bot --user-id ou_xxx --user-id-type employee_id
 ```
 
 支持参数：
@@ -460,9 +451,9 @@ contract-cli contract get <contract-id> --profile contract-group --as bot --user
 命令：
 
 ```bash
-contract-cli contract sync-user-groups --profile contract-group --as user
-contract-cli contract sync-user-groups --profile contract-group --as bot
-contract-cli contract sync-user-groups --profile contract-group --as bot --user-id ou_xxx
+contract-cli contract sync-user-groups --profile contract --as user
+contract-cli contract sync-user-groups --profile contract --as bot
+contract-cli contract sync-user-groups --profile contract --as bot --user-id ou_xxx
 ```
 
 支持参数：
@@ -487,9 +478,9 @@ contract-cli contract sync-user-groups --profile contract-group --as bot --user-
 命令：
 
 ```bash
-contract-cli contract text <contract-id> --profile contract-group --as user
-contract-cli contract text <contract-id> --profile contract-group --as bot
-contract-cli contract text <contract-id> --profile contract-group --as bot --user-id-type employee_id
+contract-cli contract text <contract-id> --profile contract --as user
+contract-cli contract text <contract-id> --profile contract --as bot
+contract-cli contract text <contract-id> --profile contract --as bot --user-id-type employee_id
 ```
 
 支持参数：
@@ -517,9 +508,9 @@ contract-cli contract text <contract-id> --profile contract-group --as bot --use
 命令：
 
 ```bash
-contract-cli contract create --profile contract-group --input-file create.json
-contract-cli contract create --profile contract-group --data '{"title":"demo"}'
-contract-cli contract create --profile contract-group --as bot --data '{"contract_name":"demo","create_user_id":"ou_xxx"}'
+contract-cli contract create --profile contract --input-file create.json
+contract-cli contract create --profile contract --data '{"title":"demo"}'
+contract-cli contract create --profile contract --as bot --data '{"contract_name":"demo","create_user_id":"ou_xxx"}'
 ```
 
 支持参数：
@@ -538,9 +529,9 @@ contract-cli contract create --profile contract-group --as bot --data '{"contrac
 
 字段参考：
 
-- [create-contract-fields.md](/Users/lyy/contract-cli/skills/contract-cli-contract/references/create-contract-fields.md)
-- [create-contract-field-tree.md](/Users/lyy/contract-cli/skills/contract-cli-contract/references/create-contract-field-tree.md)
-- [create-contract-enums.md](/Users/lyy/contract-cli/skills/contract-cli-contract/references/create-contract-enums.md)
+- [create-contract-fields.md](../skills/contract-cli-contract/references/create-contract-fields.md)
+- [create-contract-field-tree.md](../skills/contract-cli-contract/references/create-contract-field-tree.md)
+- [create-contract-enums.md](../skills/contract-cli-contract/references/create-contract-enums.md)
 
 #### `contract-cli contract upload-file`
 
@@ -549,8 +540,8 @@ contract-cli contract create --profile contract-group --as bot --data '{"contrac
 命令：
 
 ```bash
-contract-cli contract upload-file --profile contract-group --as bot --file ./合同正文.docx --file-type text
-contract-cli contract upload-file --profile contract-group --as bot --file ./附件.pdf --file-type attachment --file-name 附件.pdf
+contract-cli contract upload-file --profile contract --as user --file ./合同正文.docx --file-type text
+contract-cli contract upload-file --profile contract --as bot --file ./附件.pdf --file-type attachment --file-name 附件.pdf
 ```
 
 支持参数：
@@ -563,8 +554,7 @@ contract-cli contract upload-file --profile contract-group --as bot --file ./附
 
 身份规则：
 
-- 当前仅支持 `--as bot`。
-- 显式 `--as user` 或 profile 默认身份为 user 时会在发 HTTP 前失败。
+- `--as user` 和 `--as bot` 均支持。
 - 走 `POST /open-apis/contract/v1/files/upload`。
 - 请求是 `multipart/form-data`，字段为 `file_name`、`file_type`、`file`。
 - 不接受 `--input-file` / `--data`；这两个参数只用于 JSON 请求体。
@@ -584,6 +574,195 @@ contract-cli contract upload-file --profile contract-group --as bot --file ./附
 - `archiveAttachment`：归档附件。
 - `customPictureAttachment` / `customTableAttachment` / `customFileAttachment`：自定义附件。
 
+#### `contract-cli contract submit`
+
+用途：bot 身份提交合同。
+
+命令：
+
+```bash
+contract-cli contract submit <contract-id> --profile contract --as bot
+contract-cli contract submit <contract-id> --profile contract --as bot --data '{"comment":"ok"}'
+```
+
+支持参数：
+
+- `--input-file`：可选，透传 JSON 请求体。
+- `--data`：可选，透传 JSON 请求体。
+- `--user-id-type`
+- `--user-id`
+
+身份规则：
+
+- 当前仅支持 `--as bot`。
+- 走 `POST /open-apis/contract/v1/contracts/{contract_id}/submit`。
+- 不传 `--input-file` / `--data` 时不发送请求体。
+
+#### `contract-cli contract resubmit`
+
+用途：bot 身份重新提交合同。
+
+命令：
+
+```bash
+contract-cli contract resubmit <contract-id> --profile contract --as bot
+contract-cli contract resubmit <contract-id> --profile contract --as bot --input-file resubmit.json
+```
+
+支持参数：
+
+- `--input-file`：可选，透传 JSON 请求体。
+- `--data`：可选，透传 JSON 请求体。
+- `--user-id-type`
+- `--user-id`
+
+身份规则：
+
+- 当前仅支持 `--as bot`。
+- 走 `POST /open-apis/contract/v1/contracts/{contract_id}/resubmit`。
+- 不传 `--input-file` / `--data` 时不发送请求体。
+
+#### `contract-cli contract patch`
+
+用途：bot 身份更新合同。
+
+命令：
+
+```bash
+contract-cli contract patch <contract-id> --profile contract --as bot --input-file patch.json
+contract-cli contract patch <contract-id> --profile contract --as bot --data '{"title":"demo"}'
+```
+
+支持参数：
+
+- `--input-file`
+- `--data`
+- `--user-id-type`
+- `--user-id`
+
+身份规则：
+
+- 当前仅支持 `--as bot`。
+- 走 `PATCH /open-apis/contract/v1/contracts/{contract_id}`。
+- `--input-file` / `--data` 必须传一个且互斥。
+
+#### `contract-cli contract download-file`
+
+用途：bot 身份下载合同相关文件。
+
+命令：
+
+```bash
+contract-cli contract download-file <file-id> --profile contract --as bot
+contract-cli contract download-file <file-id> --profile contract --as bot --output-file ./contract.pdf
+contract-cli contract download-file <file-id> --profile contract --as bot --raw > contract.pdf
+```
+
+支持参数：
+
+- `--output-file`：保存到指定文件；不传时默认拉起保存文件弹窗。
+- `--force`：覆盖已存在的 `--output-file`。
+- `--raw`：把文件内容写到 stdout，不打印额外提示。
+- `--user-id-type`
+- `--user-id`
+
+身份规则：
+
+- 当前仅支持 `--as bot`。
+- 走 `GET /open-apis/contract/v1/files/{file_id}`。
+- 不实现 `dowload-file` 拼写别名。
+- 无 GUI、远程、CI、Agent 环境推荐显式传 `--output-file`。
+
+#### `contract-cli contract delete`
+
+用途：bot 身份删除草稿合同。
+
+命令：
+
+```bash
+contract-cli contract delete <contract-id> --profile contract --as bot
+```
+
+支持参数：
+
+- `--user-id-type`
+- `--user-id`
+
+身份规则：
+
+- 当前仅支持 `--as bot`。
+- 走 `DELETE /open-apis/contract/v1/contracts/{contract_id}`。
+- 命令直接删除，不额外要求 `--yes`。
+
+#### `contract-cli contract print-file`
+
+用途：bot 身份生成合同打印文件。
+
+命令：
+
+```bash
+contract-cli contract print-file --profile contract --as bot --input-file print-file.json
+contract-cli contract print-file --profile contract --as bot --data '{"contract_id":"<contract-id>"}'
+```
+
+支持参数：
+
+- `--input-file`
+- `--data`
+- `--user-id-type`
+- `--user-id`
+
+身份规则：
+
+- 当前仅支持 `--as bot`。
+- 走 `POST /open-apis/contract/v1/files`。
+- `--input-file` / `--data` 必须传一个且互斥。
+
+#### `contract-cli contract share get`
+
+用途：bot 身份查询合同分享记录。
+
+命令：
+
+```bash
+contract-cli contract share get <contract-id> --profile contract --as bot
+```
+
+身份规则：
+
+- 当前仅支持 `--as bot`。
+- 走 `GET /open-apis/contract/v1/contracts/{contract_id}/share_records`。
+
+#### `contract-cli contract cooperation link get`
+
+用途：bot 身份查询合同协商邀请链接。
+
+命令：
+
+```bash
+contract-cli contract cooperation link get <contract-id> --profile contract --as bot
+```
+
+身份规则：
+
+- 当前仅支持 `--as bot`。
+- 走 `GET /open-apis/contract/v1/contracts/{contract_id}/cooperation_link`。
+
+#### `contract-cli contract cooperation record get`
+
+用途：bot 身份查询合同协商操作记录信息。
+
+命令：
+
+```bash
+contract-cli contract cooperation record get <contract-id> --profile contract --as bot
+```
+
+身份规则：
+
+- 当前仅支持 `--as bot`。
+- 走 `GET /open-apis/contract/v1/contracts/{contract_id}/cooperation_record_info`。
+
 #### `contract-cli contract category list`
 
 用途：列出合同分类。
@@ -591,8 +770,8 @@ contract-cli contract upload-file --profile contract-group --as bot --file ./附
 命令：
 
 ```bash
-contract-cli contract category list --profile contract-group
-contract-cli contract category list --profile contract-group --as bot --lang zh-CN
+contract-cli contract category list --profile contract
+contract-cli contract category list --profile contract --as bot --lang zh-CN
 ```
 
 支持参数：
@@ -613,8 +792,8 @@ contract-cli contract category list --profile contract-group --as bot --lang zh-
 命令：
 
 ```bash
-contract-cli contract template list --profile contract-group
-contract-cli contract template list --profile contract-group --as bot --category-number CAT-1 --page-size 20 --user-id ou_xxx --user-id-type employee_id
+contract-cli contract template list --profile contract
+contract-cli contract template list --profile contract --as bot --category-number CAT-1 --page-size 20 --user-id ou_xxx --user-id-type employee_id
 ```
 
 支持参数：
@@ -639,8 +818,8 @@ contract-cli contract template list --profile contract-group --as bot --category
 命令：
 
 ```bash
-contract-cli contract template get <template-id> --profile contract-group
-contract-cli contract template get <template-id> --profile contract-group --as bot --user-id ou_xxx --user-id-type employee_id
+contract-cli contract template get <template-id> --profile contract
+contract-cli contract template get <template-id> --profile contract --as bot --user-id ou_xxx --user-id-type employee_id
 ```
 
 身份规则：
@@ -659,8 +838,8 @@ contract-cli contract template get <template-id> --profile contract-group --as b
 命令：
 
 ```bash
-contract-cli contract template instantiate --profile contract-group --input-file template-instance.json
-contract-cli contract template instantiate --profile contract-group --as bot --data '{"template_number":"TMP001","create_user_id":"ou_xxx"}' --user-id-type employee_id
+contract-cli contract template instantiate --profile contract --input-file template-instance.json
+contract-cli contract template instantiate --profile contract --as bot --data '{"template_number":"TMP001","create_user_id":"ou_xxx"}' --user-id-type employee_id
 ```
 
 支持参数：
@@ -684,7 +863,7 @@ contract-cli contract template instantiate --profile contract-group --as bot --d
 命令：
 
 ```bash
-contract-cli contract enum list --profile contract-group --type contract_status
+contract-cli contract enum list --profile contract --type contract_status
 ```
 
 支持参数：
@@ -709,7 +888,7 @@ contract-cli contract enum list --profile contract-group --type contract_status
 命令：
 
 ```bash
-contract-cli mdm vendor list --profile contract-group --name 供应商 --page-size 10
+contract-cli mdm vendor list --profile contract --name 供应商 --page-size 10
 ```
 
 支持参数：
@@ -735,7 +914,7 @@ contract-cli mdm vendor list --profile contract-group --name 供应商 --page-si
 命令：
 
 ```bash
-contract-cli mdm vendor get <vendor-id> --profile contract-group
+contract-cli mdm vendor get <vendor-id> --profile contract
 ```
 
 身份规则：
@@ -754,7 +933,7 @@ contract-cli mdm vendor get <vendor-id> --profile contract-group
 命令：
 
 ```bash
-contract-cli mdm legal list --profile contract-group --name 主体A --page-size 10
+contract-cli mdm legal list --profile contract --name 主体A --page-size 10
 ```
 
 支持参数：
@@ -779,7 +958,7 @@ contract-cli mdm legal list --profile contract-group --name 主体A --page-size 
 命令：
 
 ```bash
-contract-cli mdm legal get <legal-entity-id> --profile contract-group
+contract-cli mdm legal get <legal-entity-id> --profile contract
 ```
 
 身份规则：
@@ -798,7 +977,7 @@ contract-cli mdm legal get <legal-entity-id> --profile contract-group
 命令：
 
 ```bash
-contract-cli mdm fields list --profile contract-group --biz-line vendor
+contract-cli mdm fields list --profile contract --biz-line vendor
 ```
 
 支持参数：
@@ -808,21 +987,24 @@ contract-cli mdm fields list --profile contract-group --biz-line vendor
 当前支持的典型值：
 
 - `vendor`
-- `legal_entity`
-- `vendor_risk`
+- `legal_entity`：user 原样透传；bot 会自动映射为 `legalEntity`
+- `vendor_risk`：仅 user/MCP 路径可用，bot 当前不支持
 
 身份规则：
 
 - `--as user`
   - 走 `/open-apis/contract/v1/mcp/config/config_list`
+  - `--biz-line` 可传 `vendor`、`legal_entity`、`vendor_risk`
 - `--as bot`
   - 走 `/open-apis/mdm/v1/config/config_list`
   - 文档显示文本就是这条路径，但超链接目标误指到了 `vendors`
-  - query 表使用的是 `biz_line`，CLI 继续沿用 `--biz-line -> biz_line` 的透传映射
+  - 后端当前只接受 `vendor` 或 `legalEntity`
+  - CLI 允许继续传 `legal_entity`，并在 bot 路由下自动映射为 `legalEntity`
+  - `vendor_risk` 在 bot 身份下会被本地拒绝，不再发送请求
 
 ## 后续扩展 bot 接口时的建议落点
 
-- 新增 bot 业务接口时，先用 `contract-cli api call ... --as bot` 验证开放平台路径和鉴权是否可用
-- 验证稳定后，再决定是否沉淀成新的结构化命令
+- 新增 bot 业务接口时，优先直接沉淀成结构化命令，避免把预留的 `api call` 暴露给最终用户
+- 如需临时验证开放平台路径和鉴权，建议在本地测试或开发工具里完成，不把验证入口写入公开文档
 - 一旦新增结构化 bot 命令，先更新本文档的“命令矩阵”和“身份规则”，再补实现与测试
 - 如果未来同一命令同时支持 user 和 bot，需要在文档里明确写出路径差异、参数差异和默认身份规则

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -46,9 +47,15 @@ type authProvider interface {
 }
 
 type userAuthProvider struct {
-	httpClient  *http.Client
-	logger      *slog.Logger
-	openBrowser func(string) error
+	httpClient             *http.Client
+	logger                 *slog.Logger
+	openBrowser            func(string) error
+	authorizationURLWriter io.Writer
+	startCallbackServer    func(string) (authorizationCallback, error)
+}
+
+type authorizationCallback interface {
+	Wait(context.Context, string) (string, error)
 }
 
 func (p userAuthProvider) Login(ctx context.Context, profile *config.Profile, options authCommandOptions) (string, error) {
@@ -83,7 +90,13 @@ func (p userAuthProvider) Login(ctx context.Context, profile *config.Profile, op
 		return "", err
 	}
 
-	callbackServer, err := oauth.StartCallbackServer(user.RedirectURL)
+	startCallbackServer := p.startCallbackServer
+	if startCallbackServer == nil {
+		startCallbackServer = func(redirectURL string) (authorizationCallback, error) {
+			return oauth.StartCallbackServer(redirectURL)
+		}
+	}
+	callbackServer, err := startCallbackServer(user.RedirectURL)
 	if err != nil {
 		return "", err
 	}
@@ -102,7 +115,12 @@ func (p userAuthProvider) Login(ctx context.Context, profile *config.Profile, op
 		return "", err
 	}
 
-	if !options.NoOpenBrowser {
+	p.logger.Info("user auth authorization url prepared", "profile", profile.Name, "no_open_browser", options.NoOpenBrowser)
+	if options.NoOpenBrowser {
+		if p.authorizationURLWriter != nil {
+			_, _ = fmt.Fprint(p.authorizationURLWriter, authorizationURLMessage(authURL))
+		}
+	} else {
 		if err := p.openBrowser(authURL); err != nil {
 			p.logger.Warn("open browser failed", "profile", profile.Name, "error", err.Error())
 		}
@@ -132,12 +150,15 @@ func (p userAuthProvider) Login(ctx context.Context, profile *config.Profile, op
 	p.logger.Info("user auth login completed", "profile", profile.Name)
 
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("Open this URL and finish authorization:\n%s\n", authURL))
 	builder.WriteString(fmt.Sprintf("Authorization succeeded for profile %q.", profile.Name))
 	if !token.Expiry.IsZero() {
 		builder.WriteString(fmt.Sprintf("\nAccess token expires at: %s", token.Expiry.Format(time.RFC3339)))
 	}
 	return builder.String(), nil
+}
+
+func authorizationURLMessage(authURL string) string {
+	return fmt.Sprintf("Open this URL and finish authorization:\n%s\n", authURL)
 }
 
 func (p userAuthProvider) Status(_ context.Context, profile config.Profile, _ authCommandOptions) (authStatusView, error) {
@@ -190,7 +211,7 @@ func (p botAuthProvider) Login(ctx context.Context, profile *config.Profile, opt
 		return "", err
 	}
 	if profile.BotTokenEndpoint == "" {
-		err = fmt.Errorf("bot identity is not configured; run `contract-cli config add --env %s --name %s` first", profile.Environment, profile.Name)
+		err = fmt.Errorf("bot identity is not configured; run `contract-cli config add --env prod --name %s` first", profile.Name)
 		p.logger.Error("bot auth token endpoint missing", "profile", profile.Name, "environment", profile.Environment, "error", err.Error())
 		return "", err
 	}
@@ -255,7 +276,6 @@ func (p botAuthProvider) Status(_ context.Context, profile config.Profile, optio
 		{Label: "App ID", Value: emptyFallback(credentials.appID, "<not-configured>")},
 		{Label: "App Secret", Value: secretState},
 		{Label: "Credential Source", Value: credentials.source},
-		{Label: "Token Endpoint", Value: emptyFallback(profile.BotTokenEndpoint, "<not-configured>")},
 		{Label: "Token Protocol", Value: "tenant_access_token/internal"},
 	}
 	if token := profile.Identities.Bot.Token; token != nil && !token.Expiry.IsZero() {

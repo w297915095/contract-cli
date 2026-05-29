@@ -20,9 +20,12 @@ type Service struct {
 }
 
 type TextInput struct {
-	FullText bool
-	Offset   int
-	Limit    int
+	FullText    bool
+	FullTextSet bool
+	Offset      int
+	OffsetSet   bool
+	Limit       int
+	LimitSet    bool
 }
 
 type SearchInput struct {
@@ -101,12 +104,12 @@ func (s *Service) GetText(ctx context.Context, requestContext openplatform.Reque
 		return openplatform.Response{}, fmt.Errorf("contract id is required")
 	}
 	query := url.Values{
-		"full_text": {strconv.FormatBool(input.FullText)},
+		"full_text": {strconv.FormatBool(resolveTextFullText(input))},
 	}
-	if input.Offset > 0 {
+	if input.OffsetSet {
 		query.Set("offset", strconv.Itoa(input.Offset))
 	}
-	if input.Limit > 0 {
+	if input.LimitSet {
 		query.Set("limit", strconv.Itoa(input.Limit))
 	}
 	switch requestContext.Identity {
@@ -114,7 +117,7 @@ func (s *Service) GetText(ctx context.Context, requestContext openplatform.Reque
 		return s.do(ctx, requestContext, "get-contract-text", map[string]string{"{contractId}": url.PathEscape(contractID)}, query, nil)
 	case config.IdentityBot:
 		return s.client.Do(ctx, requestContext, openplatform.Request{
-			Method:         http.MethodPost,
+			Method:         http.MethodGet,
 			Path:           "/open-apis/contract/v1/contracts/" + url.PathEscape(contractID) + "/text",
 			Query:          query,
 			IdentityPolicy: openplatform.IdentityPolicyAny,
@@ -122,6 +125,13 @@ func (s *Service) GetText(ctx context.Context, requestContext openplatform.Reque
 	default:
 		return openplatform.Response{}, fmt.Errorf("unsupported identity %q for contract text", requestContext.Identity)
 	}
+}
+
+func resolveTextFullText(input TextInput) bool {
+	if input.FullTextSet {
+		return input.FullText
+	}
+	return !input.OffsetSet && !input.LimitSet
 }
 
 func (s *Service) ListCategories(ctx context.Context, requestContext openplatform.RequestContext, lang string) (openplatform.Response, error) {
@@ -255,6 +265,117 @@ func (s *Service) UploadFile(ctx context.Context, requestContext openplatform.Re
 		Headers: http.Header{
 			"Content-Type": {contentType},
 		},
+		IdentityPolicy: openplatform.IdentityPolicyAny,
+	})
+}
+
+func (s *Service) Submit(ctx context.Context, requestContext openplatform.RequestContext, contractID string, body []byte) (openplatform.Response, error) {
+	contractID = strings.TrimSpace(contractID)
+	if contractID == "" {
+		return openplatform.Response{}, fmt.Errorf("contract id is required")
+	}
+	return s.client.Do(ctx, requestContext, openplatform.Request{
+		Method:         http.MethodPost,
+		Path:           "/open-apis/contract/v1/contracts/" + url.PathEscape(contractID) + "/submit",
+		Body:           body,
+		IdentityPolicy: openplatform.IdentityPolicyBotOnly,
+	})
+}
+
+func (s *Service) Resubmit(ctx context.Context, requestContext openplatform.RequestContext, contractID string, body []byte) (openplatform.Response, error) {
+	contractID = strings.TrimSpace(contractID)
+	if contractID == "" {
+		return openplatform.Response{}, fmt.Errorf("contract id is required")
+	}
+	return s.client.Do(ctx, requestContext, openplatform.Request{
+		Method:         http.MethodPost,
+		Path:           "/open-apis/contract/v1/contracts/" + url.PathEscape(contractID) + "/resubmit",
+		Body:           body,
+		IdentityPolicy: openplatform.IdentityPolicyBotOnly,
+	})
+}
+
+func (s *Service) Patch(ctx context.Context, requestContext openplatform.RequestContext, contractID string, body []byte) (openplatform.Response, error) {
+	contractID = strings.TrimSpace(contractID)
+	if contractID == "" {
+		return openplatform.Response{}, fmt.Errorf("contract id is required")
+	}
+	return s.client.Do(ctx, requestContext, openplatform.Request{
+		Method:         http.MethodPatch,
+		Path:           "/open-apis/contract/v1/contracts/" + url.PathEscape(contractID),
+		Body:           body,
+		IdentityPolicy: openplatform.IdentityPolicyBotOnly,
+	})
+}
+
+func (s *Service) DownloadFile(ctx context.Context, requestContext openplatform.RequestContext, fileID string, writer io.Writer) (openplatform.Response, error) {
+	fileID = strings.TrimSpace(fileID)
+	if fileID == "" {
+		return openplatform.Response{}, fmt.Errorf("file id is required")
+	}
+	if writer == nil {
+		return openplatform.Response{}, fmt.Errorf("download writer is required")
+	}
+	return s.client.DoStream(ctx, requestContext, openplatform.Request{
+		Method:         http.MethodGet,
+		Path:           "/open-apis/contract/v1/files/" + url.PathEscape(fileID),
+		IdentityPolicy: openplatform.IdentityPolicyBotOnly,
+	}, writer)
+}
+
+func (s *Service) Delete(ctx context.Context, requestContext openplatform.RequestContext, contractID string) (openplatform.Response, error) {
+	contractID = strings.TrimSpace(contractID)
+	if contractID == "" {
+		return openplatform.Response{}, fmt.Errorf("contract id is required")
+	}
+	return s.client.Do(ctx, requestContext, openplatform.Request{
+		Method:         http.MethodDelete,
+		Path:           "/open-apis/contract/v1/contracts/" + url.PathEscape(contractID),
+		IdentityPolicy: openplatform.IdentityPolicyBotOnly,
+	})
+}
+
+func (s *Service) PrintFile(ctx context.Context, requestContext openplatform.RequestContext, body []byte) (openplatform.Response, error) {
+	return s.client.Do(ctx, requestContext, openplatform.Request{
+		Method:         http.MethodPost,
+		Path:           "/open-apis/contract/v1/files",
+		Body:           body,
+		IdentityPolicy: openplatform.IdentityPolicyBotOnly,
+	})
+}
+
+func (s *Service) GetShareRecords(ctx context.Context, requestContext openplatform.RequestContext, contractID string) (openplatform.Response, error) {
+	contractID = strings.TrimSpace(contractID)
+	if contractID == "" {
+		return openplatform.Response{}, fmt.Errorf("contract id is required")
+	}
+	return s.client.Do(ctx, requestContext, openplatform.Request{
+		Method:         http.MethodGet,
+		Path:           "/open-apis/contract/v1/contracts/" + url.PathEscape(contractID) + "/share_records",
+		IdentityPolicy: openplatform.IdentityPolicyBotOnly,
+	})
+}
+
+func (s *Service) GetCooperationLink(ctx context.Context, requestContext openplatform.RequestContext, contractID string) (openplatform.Response, error) {
+	contractID = strings.TrimSpace(contractID)
+	if contractID == "" {
+		return openplatform.Response{}, fmt.Errorf("contract id is required")
+	}
+	return s.client.Do(ctx, requestContext, openplatform.Request{
+		Method:         http.MethodGet,
+		Path:           "/open-apis/contract/v1/contracts/" + url.PathEscape(contractID) + "/cooperation_link",
+		IdentityPolicy: openplatform.IdentityPolicyBotOnly,
+	})
+}
+
+func (s *Service) GetCooperationRecordInfo(ctx context.Context, requestContext openplatform.RequestContext, contractID string) (openplatform.Response, error) {
+	contractID = strings.TrimSpace(contractID)
+	if contractID == "" {
+		return openplatform.Response{}, fmt.Errorf("contract id is required")
+	}
+	return s.client.Do(ctx, requestContext, openplatform.Request{
+		Method:         http.MethodGet,
+		Path:           "/open-apis/contract/v1/contracts/" + url.PathEscape(contractID) + "/cooperation_record_info",
 		IdentityPolicy: openplatform.IdentityPolicyBotOnly,
 	})
 }

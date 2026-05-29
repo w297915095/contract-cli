@@ -22,6 +22,7 @@ func TestCommandReferenceDocumentCoversCurrentSupportedCommands(t *testing.T) {
 		"contract-cli --help",
 		"contract-cli help contract upload-file",
 		"contract-cli contract search --help",
+		"contract-cli config add --env prod --name contract",
 		"contract-cli config add",
 		"contract-cli auth login",
 		"contract-cli auth status",
@@ -31,14 +32,23 @@ func TestCommandReferenceDocumentCoversCurrentSupportedCommands(t *testing.T) {
 		"contract-cli skills list",
 		"contract-cli skills install",
 		"npx skills add qfeius/contract-cli -y -g",
+		"api call 暂未开放使用",
 		"contract-cli update check",
-		"contract-cli api call",
 		"contract-cli contract search",
 		"contract-cli contract get",
 		"contract-cli contract sync-user-groups",
 		"contract-cli contract text",
 		"contract-cli contract create",
 		"contract-cli contract upload-file",
+		"contract-cli contract submit",
+		"contract-cli contract resubmit",
+		"contract-cli contract patch",
+		"contract-cli contract download-file",
+		"contract-cli contract delete",
+		"contract-cli contract print-file",
+		"contract-cli contract share get",
+		"contract-cli contract cooperation link get",
+		"contract-cli contract cooperation record get",
 		"contract-cli contract category list",
 		"contract-cli contract template list",
 		"contract-cli contract template get",
@@ -49,8 +59,8 @@ func TestCommandReferenceDocumentCoversCurrentSupportedCommands(t *testing.T) {
 		"contract-cli mdm legal list",
 		"contract-cli mdm legal get",
 		"contract-cli mdm fields list",
-		"`contract get`、`contract search`、`contract create`、`contract sync-user-groups`、`contract text`、`contract category list`、`contract template list`、`contract template get`、`contract template instantiate`、`mdm vendor list`、`mdm vendor get`、`mdm legal list`、`mdm legal get`、`mdm fields list` 是当前仅有的十四个同时支持 `user` 与 `bot` 的结构化业务命令",
-		"`contract upload-file` 当前仅支持 `--as bot`",
+		"`contract get`、`contract search`、`contract create`、`contract sync-user-groups`、`contract text`、`contract category list`、`contract template list`、`contract template get`、`contract template instantiate`、`contract upload-file`、`mdm vendor list`、`mdm vendor get`、`mdm legal list`、`mdm legal get`、`mdm fields list` 是当前仅有的十五个同时支持 `user` 与 `bot` 的结构化业务命令",
+		"`contract submit`、`contract resubmit`、`contract patch`、`contract download-file`、`contract delete`、`contract print-file`、`contract share get`、`contract cooperation link get`、`contract cooperation record get` 当前仅支持 `--as bot`",
 		"`--user-id-type`",
 		"`--user-id`",
 		"传了就拼接到 query string",
@@ -59,6 +69,22 @@ func TestCommandReferenceDocumentCoversCurrentSupportedCommands(t *testing.T) {
 	for _, fragment := range requiredFragments {
 		if !strings.Contains(text, fragment) {
 			t.Fatalf("command reference missing %q", fragment)
+		}
+	}
+	if strings.Contains(text, "contract-cli api call GET") ||
+		strings.Contains(text, "contract-cli api call POST") {
+		t.Fatalf("command reference should not expose runnable api call examples")
+	}
+	for _, forbidden := range []string{
+		"contract" + "-group",
+		"/Users/lyy/",
+		"当前只预置 `dev`",
+		"`--env`：当前仅支持 `dev`",
+		"支持 `prod` 和 `dev`",
+		"contract-cli config add --env dev",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("command reference should not contain production-stale fragment %q", forbidden)
 		}
 	}
 }

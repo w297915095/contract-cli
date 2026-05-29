@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 )
 
@@ -31,6 +32,15 @@ func TestPackageJSONIncludesSkillsInNPMPackage(t *testing.T) {
 		if !containsString(manifest.Files, required) {
 			t.Fatalf("package.json files must include %s, got %v", required, manifest.Files)
 		}
+	}
+}
+
+func TestAPICallSkillDescriptorIsNotPubliclyInstallable(t *testing.T) {
+	t.Parallel()
+
+	disabledSkillPath := filepath.Join("..", "..", "skills", "contract-cli-api-call", "SKILL.md")
+	if _, err := os.Stat(disabledSkillPath); !os.IsNotExist(err) {
+		t.Fatalf("api call skill descriptor should stay absent while api call is unavailable, stat error = %v", err)
 	}
 }
 
@@ -65,8 +75,8 @@ func TestPackageJSONPublishingMetadata(t *testing.T) {
 	if manifest.Name != "@qfeius/contract-cli" {
 		t.Fatalf("package name = %q, want @qfeius/contract-cli", manifest.Name)
 	}
-	if manifest.Version != "0.1.0-beta.1" {
-		t.Fatalf("package version = %q, want 0.1.0-beta.1", manifest.Version)
+	if !validPackageVersion(manifest.Version) {
+		t.Fatalf("package version = %q, want valid semver", manifest.Version)
 	}
 	if manifest.PublishConfig.Registry != "https://registry.npmjs.org/" {
 		t.Fatalf("publish registry = %q, want https://registry.npmjs.org/", manifest.PublishConfig.Registry)
@@ -88,6 +98,10 @@ func TestPackageJSONPublishingMetadata(t *testing.T) {
 	if manifest.Repository.URL != wantRepositoryURL {
 		t.Fatalf("repository url = %q, want %q", manifest.Repository.URL, wantRepositoryURL)
 	}
+}
+
+func validPackageVersion(version string) bool {
+	return regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$`).MatchString(version)
 }
 
 func containsString(values []string, want string) bool {

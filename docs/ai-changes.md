@@ -1,5 +1,110 @@
 # AI 变更记录
 
+- 2026-05-27
+  变更摘要：收敛 profile 和授权状态输出，避免展示开放平台与授权 endpoint 地址。
+  涉及文件/模块：`internal/cli/app.go`、`internal/cli/auth_provider.go`、CLI 测试、`docs/cli-test-plan.md`、`skills/auth`
+  关键逻辑/决策：`config add` 只输出保存成功；`auth status` 不再输出 Open Platform URL 或 bot Token Endpoint；自动打开浏览器的 user 登录成功消息不再回显授权 URL，`--no-open-browser` 仍会在等待回调前打印必要授权链接。
+
+- 2026-05-27
+  变更摘要：移除 CLI 内置 dev 环境预设，收敛正式包初始化入口到 prod。
+  涉及文件/模块：`internal/cli/app.go`、`internal/cli/help.go`、`internal/cli/auth_provider.go`、`internal/openplatform/client.go`、CLI 测试、`docs/*`、`skills/auth`
+  关键逻辑/决策：`config add --env dev` 现在本地拒绝并提示仅支持 `prod`；help、错误提示、命令文档、测试计划和 auth skill 不再引导新建 dev profile；保留既有 profile 按已保存 URL 运行的兼容性。
+
+- 2026-05-12
+  变更摘要：全仓收敛旧 profile 示例名，统一使用 `--profile contract`。
+  涉及文件/模块：`internal/cli/help.go`、CLI 测试、`docs/*`、`skills/contract-cli-contract`、`skills/contract-cli-shared`
+  关键逻辑/决策：用户可见示例、测试命令参数和 profile fixture 从旧 `contract-group` 迁移到 `contract`；命令参考测试保留防回退断言，避免后续文档重新出现旧 profile 名。
+
+- 2026-05-12
+  变更摘要：支持 `contract upload-file` 在 user 身份下上传文件。
+  涉及文件/模块：`internal/cli/contract_command.go`、`internal/openplatform/contract/service.go`、上传命令测试、帮助与命令文档、contract skills
+  关键逻辑/决策：上传接口仍复用 `POST /open-apis/contract/v1/files/upload` 和 multipart 字段，将身份策略从 bot-only 调整为 user/bot 通用，并补充显式 user 与默认 user 上传测试。
+
+- 2026-04-23
+  变更摘要：新增 9 个 bot-only 合同命令，覆盖提交、重提、更新、下载、删除、打印、分享记录和协商信息查询。
+  涉及文件/模块：`internal/openplatform`、`internal/openplatform/contract`、`internal/cli/contract_command.go`、`internal/cli/help.go`、`docs/cli-command-reference.md`、`docs/cli-test-plan.md`、`skills/contract-cli-contract`、`skills/contract-cli-shared`
+  关键逻辑/决策：所有新增结构化命令统一 `IdentityPolicyBotOnly`，通用 query 仍由 `CommonQuery` 注入；`download-file` 使用流式下载，默认保存弹窗，脚本环境推荐 `--output-file`，`--raw` 直接写 stdout；`delete` 直接执行不加 `--yes`。
+
+- 2026-04-23
+  变更摘要：新增 bot 命令开发指南，沉淀后续 bot 功能和 skill 文档开发约定。
+  涉及文件/模块：`docs/bot-command-development-guide.md`、`docs/ai-changes.md`
+  关键逻辑/决策：按功能开发、身份路由、通用 query、测试要求、skill 编写和 Definition of Done 组织；补充 skill 版本、业务错误、`user_id` 必填、输出归一化等后续需要团队确认的问题。
+
+- 2026-04-29
+  变更摘要：发布前忽略所有层级的 macOS `.DS_Store` 本机文件。
+  涉及文件/模块：`.gitignore`、`docs/ai-changes.md`
+  关键逻辑/决策：将仅忽略仓库根目录 `/.DS_Store` 调整为全局 `.DS_Store`，避免子目录 Finder 元数据让正式发版脚本误判工作区不干净。
+
+- 2026-04-29
+  变更摘要：收敛正式版更新检查示例，并为构建链路开启 `-trimpath`。
+  涉及文件/模块：`build.sh`、`Makefile`、`scripts/build-release-assets.sh`、`tests/cli_e2e/smoke.sh`、`tests/release/local-install.sh`、`tests/release/build-flags.sh`、`internal/cli/help.go`、`docs/cli-command-reference.md`
+  关键逻辑/决策：正式帮助与命令参考只展示 `update check --channel latest` 示例，避免正式包把 beta 作为默认引导；本地构建、安装和 release assets 构建统一加 `go build/install -trimpath`，降低二进制中泄漏本机源码绝对路径的风险。
+
+- 2026-04-29
+  变更摘要：收敛正式包可见的默认环境、profile 与安装文档口径。
+  涉及文件/模块：`internal/cli/help.go`、`internal/cli/app.go`、`internal/cli/help_command_test.go`、`internal/cli/command_reference_doc_test.go`、`README.md`、`docs/cli-command-reference.md`、`skills/*`
+  关键逻辑/决策：`config add --help` 和命令参考统一改为默认 `prod`、默认 profile `contract`；README 移除 beta 安装入口和本机绝对路径；skills 示例从旧 `contract-group` 收敛到 `contract`，并补测试防止正式包文案回退。
+
+- 2026-04-29
+  变更摘要：新增正式版一键发版脚本，并把发布说明补齐到 README。
+  涉及文件/模块：`scripts/release.sh`、`tests/release/release-script.sh`、`Makefile`、`README.md`、`docs/ai-changes.md`
+  关键逻辑/决策：正式脚本要求稳定语义版本 `x.y.z`，默认执行 `make release-check` 和 `make release-assets`，远端发布时创建 GitHub latest release 并执行 `npm publish --tag latest`；release 脚本检查现在同时覆盖 beta 与正式包 dry-run。
+
+- 2026-04-27
+  变更摘要：修复 `contract text` 标准开放平台路由与文本参数默认值。
+  涉及文件/模块：`internal/openplatform/contract/service.go`、`internal/cli/contract_command.go`、`internal/cli/command_support.go`、`internal/openplatform/contract/service_test.go`、`internal/cli/mcp_command_test.go`、`docs/ai-changes.md`
+  关键逻辑/决策：bot 身份下 `contract text` 改为 `GET /open-apis/contract/v1/contracts/{contract_id}/text`；命令可区分参数是否显式传入，默认请求完整文本 `full_text=true`，传 `--offset/--limit` 时自动使用分页模式 `full_text=false` 并保留 `offset=0`。
+
+- 2026-04-24
+  变更摘要：新增本地 `contract-cli-beta-release` skill，沉淀 beta 发版流程。
+  涉及文件/模块：`~/.codex/skills/contract-cli-beta-release/SKILL.md`、`~/.codex/skills/contract-cli-beta-release/agents/openai.yaml`、`docs/ai-changes.md`
+  关键逻辑/决策：skill 固化 `REMOTE=github BRANCH=main scripts/release-beta.sh --version <version> --publish --yes` 流程、npm token 临时注入、半发布恢复和 GitHub/npm 最终校验要求，后续只需提供版本号与 npm key 即可执行。
+
+- 2026-04-24
+  变更摘要：修复 beta 发布前 npm 打包检查仍要求禁用 `api call` skill 的问题。
+  涉及文件/模块：`package.json`、`tests/release/package-dry-run.sh`、`docs/cli-command-reference.md`、`docs/cli-test-plan.md`、`docs/ai-changes.md`
+  关键逻辑/决策：npm 包显式排除 `skills/contract-cli-api-call/**`，release dry-run 测试改为禁止禁用 skill 相关文件进入包内；文档同步移除内置安装会安装 `contract-cli-api-call` 的过期描述。
+
+- 2026-04-24
+  变更摘要：暂时封住预留的 `api call` 入口，保留实现代码但不对外暴露。
+  涉及文件/模块：`internal/cli/app.go`、`internal/cli/help.go`、`internal/cli/api_command_test.go`、`internal/cli/skills_command.go`、`docs/cli-command-reference.md`、`docs/cli-test-plan.md`、`skills/contract-cli-*`、`docs/ai-changes.md`
+  关键逻辑/决策：`contract-cli api ...` 在 profile、HTTP、update check 前直接返回暂未开放错误；help registry 不再注册 `api` 主题；内置 skills 跳过 `contract-cli-api-call`，并移除该目录的 `SKILL.md`，仅保留禁用说明和历史参考。
+
+- 2026-04-24
+  变更摘要：修复 bot 身份下 `mdm fields list` 的 `biz_line` 取值与 help/文档不一致问题。
+  涉及文件/模块：`internal/openplatform/schema`、`internal/cli/mcp_command_test.go`、`internal/cli/help.go`、`docs/cli-command-reference.md`、`docs/cli-test-plan.md`、`skills/contract-cli-mdm-fields/*`、`docs/ai-changes.md`
+  关键逻辑/决策：bot 路由下允许继续传 `legal_entity` 并映射为后端实际值 `legalEntity`；`vendor_risk` 当前仅 user/MCP 支持，bot 下改为本地明确报错且不发 HTTP；同步更新 help、测试计划和 skill 示例。
+
+- 2026-04-24
+  变更摘要：修复 `auth login --as user --no-open-browser` 超时前不输出授权 URL 的问题。
+  涉及文件/模块：`internal/cli/auth_provider.go`、`internal/cli/app.go`、`internal/cli/auth_provider_test.go`、`docs/ai-changes.md`
+  关键逻辑/决策：user OAuth 登录在构造授权 URL 后、等待本地 callback 前立即将 URL 写入 stdout；正常自动打开浏览器的路径保持原有成功输出；新增可注入 callback 等待接口，测试无需真实监听端口即可覆盖超时场景。
+
+- 2026-04-22
+  变更摘要：将 user OAuth 的 `resource` 调整为可选，dev 预设不再写入旧 Higress 内网 resource。
+  涉及文件/模块：`internal/cli/app.go`、`internal/cli/app_test.go`、`internal/oauth/login.go`、`internal/oauth/login_test.go`、`docs/ai-changes.md`
+  关键逻辑/决策：`config add --env dev` 现在只依赖公开的 authorization server metadata URL 初始化 user OAuth；`BuildAuthorizationURL` 和 `ExchangeAuthorizationCode` 在 resource 为空时不再发送 `resource=` 参数，保留非空 resource 的兼容行为。
+
+- 2026-04-22
+  变更摘要：为开放平台通用 query 参数补齐 `user_id_type=user_id` 默认值。
+  涉及文件/模块：`internal/cli/command_support.go`、`internal/cli/*_test.go`、`docs/cli-command-reference.md`、`docs/cli-test-plan.md`、`skills/contract-cli-*`、`docs/ai-changes.md`
+  关键逻辑/决策：结构化命令和 `api call` 在构造 `RequestContext.CommonQuery` 时默认追加 `user_id_type=user_id`；显式传 `--user-id-type` 时覆盖默认值，`--user-id` 仍保持传了才带；MCP user-only 固定 query 仍由 `IdentityPolicyUserOnly` 保护，不会被通用参数覆盖。
+
+- 2026-04-21
+  变更摘要：增强 beta 发布脚本对已存在 GitHub Release 的幂等修正能力。
+  涉及文件/模块：`scripts/release-beta.sh`、`tests/release/release-beta-script.sh`、`docs/ai-changes.md`
+  关键逻辑/决策：发布脚本在创建或覆盖上传 GitHub Release assets 后，统一执行 `gh release edit --prerelease --latest=false`，确保 beta release 即使被重跑或手动创建过也会保持预发布状态；dry-run 测试新增该命令断言。
+
+- 2026-04-21
+  变更摘要：修复 npm 发布元信息测试锁死历史版本号导致新 beta 版本无法发布的问题。
+  涉及文件/模块：`internal/cli/package_json_test.go`、`docs/ai-changes.md`
+  关键逻辑/决策：`package.json` 的包名、registry、下载地址模板和仓库地址仍保持精确断言；版本号从固定 `0.1.0-beta.1` 改为校验合法 semver，避免每次发版都需要同步修改测试常量。
+
+- 2026-04-21
+  变更摘要：新增 beta 版本一键发布脚本和 dry-run 发布脚本测试。
+  涉及文件/模块：`scripts/release-beta.sh`、`tests/release/release-beta-script.sh`、`Makefile`、`.gitignore`、`README.md`、`docs/ai-changes.md`
+  关键逻辑/决策：发布脚本要求显式 `--version <x.y.z-beta.n>`，默认只做本地准备，`--dry-run` 不改文件，真正远端发布必须传 `--publish --yes`；远端链路按 GitHub Release 附件先于 `npm publish --tag beta` 的顺序执行；默认推送当前分支，且本地 tag 已存在并指向 HEAD 时允许恢复重跑。
+
 - 2026-04-21
   变更摘要：为当前全部已支持命令补齐统一 `--help` / `help <command>` 本地帮助系统。
   涉及文件/模块：`internal/cli/help.go`、`internal/cli/app.go`、`internal/cli/update_command.go`、`internal/cli/help_command_test.go`、`README.md`、`docs/cli-command-reference.md`、`docs/ai-changes.md`

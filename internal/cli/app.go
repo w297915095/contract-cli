@@ -17,28 +17,28 @@ import (
 	"cn.qfei/contract-cli/internal/build"
 	"cn.qfei/contract-cli/internal/config"
 	"cn.qfei/contract-cli/internal/oauth"
-	updatecheck "cn.qfei/contract-cli/internal/update"
 	contractskills "cn.qfei/contract-cli/skills"
 )
 
-const defaultProfileName = "contract-group"
+const defaultProfileName = "contract"
+
+var errAPICommandUnavailable = errors.New("api call 暂未开放使用，请使用已开放的结构化命令")
 
 type Options struct {
-	Stdout      io.Writer
-	Stderr      io.Writer
-	Logger      *slog.Logger
-	Store       *config.Store
-	Secrets     *config.SecretsStore
-	HTTPClient  *http.Client
-	OpenBrowser func(string) error
-	LookupEnv   func(string) (string, bool)
-	SkillsFS    fs.FS
+	Stdout         io.Writer
+	Stderr         io.Writer
+	Logger         *slog.Logger
+	Store          *config.Store
+	Secrets        *config.SecretsStore
+	HTTPClient     *http.Client
+	OpenBrowser    func(string) error
+	SaveFileDialog func(context.Context, string) (string, error)
+	LookupEnv      func(string) (string, bool)
+	SkillsFS       fs.FS
 
 	UpdateRegistryURL    string
 	UpdateCurrentVersion string
-	UpdateCheckInterval  time.Duration
 	Now                  func() time.Time
-	IsTerminal           func(io.Writer) bool
 }
 
 type App struct {
@@ -49,13 +49,13 @@ type App struct {
 	secrets        *config.SecretsStore
 	httpClient     *http.Client
 	openBrowser    func(string) error
+	saveFileDialog func(context.Context, string) (string, error)
 	lookupEnv      func(string) (string, bool)
 	skillsFS       fs.FS
 	updateURL      string
 	updateVersion  string
-	updateInterval time.Duration
+	updateNotice   map[string]any
 	now            func() time.Time
-	isTerminal     func(io.Writer) bool
 	userProvider   authProvider
 	botProvider    authProvider
 }
@@ -111,6 +111,10 @@ func New(options Options) *App {
 	if opener == nil {
 		opener = oauth.OpenBrowser
 	}
+	saveFileDialog := options.SaveFileDialog
+	if saveFileDialog == nil {
+		saveFileDialog = defaultSaveFileDialog
+	}
 	lookupEnv := options.LookupEnv
 	if lookupEnv == nil {
 		lookupEnv = os.LookupEnv
@@ -119,17 +123,9 @@ func New(options Options) *App {
 	if skillsFS == nil {
 		skillsFS = contractskills.FS
 	}
-	updateInterval := options.UpdateCheckInterval
-	if updateInterval == 0 {
-		updateInterval = updatecheck.DefaultCheckInterval
-	}
 	now := options.Now
 	if now == nil {
 		now = time.Now
-	}
-	isTerminal := options.IsTerminal
-	if isTerminal == nil {
-		isTerminal = defaultIsTerminal
 	}
 
 	app := &App{
@@ -140,18 +136,21 @@ func New(options Options) *App {
 		secrets:        secrets,
 		httpClient:     httpClient,
 		openBrowser:    opener,
+		saveFileDialog: saveFileDialog,
 		lookupEnv:      lookupEnv,
 		skillsFS:       skillsFS,
 		updateURL:      options.UpdateRegistryURL,
 		updateVersion:  options.UpdateCurrentVersion,
-		updateInterval: updateInterval,
 		now:            now,
-		isTerminal:     isTerminal,
 	}
 	app.userProvider = userAuthProvider{
-		httpClient:  httpClient,
-		logger:      logger,
-		openBrowser: opener,
+		httpClient:             httpClient,
+		logger:                 logger,
+		openBrowser:            opener,
+		authorizationURLWriter: stdout,
+		startCallbackServer: func(redirectURL string) (authorizationCallback, error) {
+			return oauth.StartCallbackServer(redirectURL)
+		},
 	}
 	app.botProvider = botAuthProvider{
 		httpClient: httpClient,
@@ -163,9 +162,14 @@ func New(options Options) *App {
 }
 
 func (a *App) Run(ctx context.Context, args []string) error {
+	a.updateNotice = nil
 	if len(args) == 0 {
 		a.printUsage()
 		return nil
+	}
+
+	if args[0] == "api" {
+		return errAPICommandUnavailable
 	}
 
 	if isHelpRequest(args) {
@@ -183,7 +187,7 @@ func (a *App) Run(ctx context.Context, args []string) error {
 	}
 
 	a.logger.Info("run command", "args", strings.Join(args, " "))
-	a.maybePrintUpdateNotice(ctx, args)
+	a.maybePrepareUpdateNotice(ctx, args)
 
 	switch args[0] {
 	case "config":
@@ -211,15 +215,6 @@ func (a *App) printUsage() {
 
 func (a *App) printVersion() {
 	_, _ = fmt.Fprintln(a.stdout, build.Current().String())
-}
-
-func defaultIsTerminal(writer io.Writer) bool {
-	file, ok := writer.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := file.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 func (a *App) updateCachePath() string {
@@ -251,7 +246,7 @@ func (a *App) runConfigAdd(ctx context.Context, args []string) error {
 	var redirectURL string
 	var scopes string
 
-	flags.StringVar(&env, "env", "dev", "environment preset")
+	flags.StringVar(&env, "env", "prod", "environment preset")
 	flags.StringVar(&profileName, "name", defaultProfileName, "profile name")
 	flags.StringVar(&protectedResourceURL, "resource-metadata-url", "", "override protected resource metadata URL")
 	flags.StringVar(&redirectURL, "redirect-url", "", "OAuth redirect URL")
@@ -286,7 +281,7 @@ func (a *App) runConfigAdd(ctx context.Context, args []string) error {
 			a.logger.Error("config add discover failed", "profile", profileName, "protected_resource_url", protectedResourceURL, "error", err.Error())
 			return err
 		}
-	case preset.AuthorizationServerMetadataURL != "" && preset.Resource != "":
+	case preset.AuthorizationServerMetadataURL != "":
 		discovery, err = oauth.DiscoverFromAuthorizationServer(ctx, a.httpClient, a.logger, preset.AuthorizationServerMetadataURL, preset.Resource)
 		if err != nil {
 			a.logger.Error("config add discover from authorization server failed", "profile", profileName, "authorization_server_metadata_url", preset.AuthorizationServerMetadataURL, "error", err.Error())
@@ -331,8 +326,6 @@ func (a *App) runConfigAdd(ctx context.Context, args []string) error {
 	}
 
 	_, _ = fmt.Fprintf(a.stdout, "Profile %q saved for %s.\n", profileName, env)
-	_, _ = fmt.Fprintf(a.stdout, "Open Platform URL: %s\n", profile.OpenPlatformBaseURL)
-	_, _ = fmt.Fprintf(a.stdout, "Authorization endpoint: %s\n", profile.Identities.User.AuthorizationEndpoint)
 	return nil
 }
 
@@ -447,7 +440,6 @@ func (a *App) runAuthStatus(ctx context.Context, args []string) error {
 
 	_, _ = fmt.Fprintf(a.stdout, "Profile: %s\n", profile.Name)
 	_, _ = fmt.Fprintf(a.stdout, "Environment: %s\n", profile.Environment)
-	_, _ = fmt.Fprintf(a.stdout, "Open Platform URL: %s\n", emptyFallback(profile.OpenPlatformBaseURL, "<not-configured>"))
 	_, _ = fmt.Fprintf(a.stdout, "Default Identity: %s\n", defaultIdentity(profile))
 	_, _ = fmt.Fprintf(a.stdout, "Identity: %s\n", identity)
 	for _, field := range view.Fields {
@@ -538,20 +530,19 @@ func (a *App) providerFor(identity config.IdentityKind) authProvider {
 
 func resolveEnvironment(name string) (environmentPreset, error) {
 	switch name {
-	case "dev":
+	case "prod":
 		return environmentPreset{
-			OpenPlatformBaseURL:            "https://dev-open.qtech.cn",
-			BotTokenEndpoint:               "https://dev-open.qtech.cn/open-apis/auth/v3/tenant_access_token/internal",
+			OpenPlatformBaseURL:            "https://open.qfei.cn",
+			BotTokenEndpoint:               "https://open.qfei.cn/open-apis/auth/v3/tenant_access_token/internal",
 			ProtectedResourceMetadataURL:   "",
-			AuthorizationServerMetadataURL: "https://dev-myaccount.qtech.cn/.well-known/oauth-authorization-server/contract",
-			Resource:                       "http://higress-gateway.higress-system/mcp-servers",
+			AuthorizationServerMetadataURL: "https://myaccount.qfei.cn/.well-known/oauth-authorization-server/contract",
 			RedirectURL:                    "http://127.0.0.1:8000/callback",
-			Scopes:                         []string{"mcp:tools", "mcp:resources"},
+			Scopes:                         []string{"cli:tools", "cli:resources"},
 			BusinessType:                   "contract",
 			ClientName:                     "contract-cli",
 		}, nil
 	default:
-		return environmentPreset{}, fmt.Errorf("unsupported environment %q; only dev is preconfigured right now", name)
+		return environmentPreset{}, fmt.Errorf("unsupported environment %q; supported environments: prod", name)
 	}
 }
 

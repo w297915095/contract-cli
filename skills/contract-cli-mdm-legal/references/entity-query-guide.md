@@ -16,8 +16,8 @@
 当前结构化命令只有两类：
 
 ```bash
-contract-cli mdm legal list --profile contract-group --name "上海主体"
-contract-cli mdm legal get 7023646046559404327 --profile contract-group
+contract-cli mdm legal list --profile contract --name "上海主体"
+contract-cli mdm legal get 7023646046559404327 --profile contract
 ```
 
 硬约束：
@@ -41,7 +41,7 @@ contract-cli mdm legal get 7023646046559404327 --profile contract-group
 最小命令：
 
 ```bash
-contract-cli mdm legal list --profile contract-group --name "上海主体"
+contract-cli mdm legal list --profile contract --name "上海主体"
 ```
 
 常见追加参数：
@@ -67,13 +67,13 @@ contract-cli mdm legal list --profile contract-group --name "上海主体"
 最小命令：
 
 ```bash
-contract-cli mdm legal list --profile contract-group --page-size 20
+contract-cli mdm legal list --profile contract --page-size 20
 ```
 
 bot 示例：
 
 ```bash
-contract-cli mdm legal list --profile contract-group --as bot --name "主体A" --page-size 20 --user-id-type employee_id
+contract-cli mdm legal list --profile contract --as bot --name "主体A" --page-size 20 --user-id-type employee_id
 ```
 
 ### 2.3 已知 id 直接查详情
@@ -85,13 +85,13 @@ contract-cli mdm legal list --profile contract-group --as bot --name "主体A" -
 最小命令：
 
 ```bash
-contract-cli mdm legal get 7023646046559404327 --profile contract-group
+contract-cli mdm legal get 7023646046559404327 --profile contract
 ```
 
 bot 示例：
 
 ```bash
-contract-cli mdm legal get 7003410079584092448 --profile contract-group --as bot --user-id-type employee_id
+contract-cli mdm legal get 7003410079584092448 --profile contract --as bot --user-id-type employee_id
 ```
 
 补充说明：
@@ -103,6 +103,6 @@ contract-cli mdm legal get 7003410079584092448 --profile contract-group --as bot
 
 ## 3. 什么时候不要走这里
 
-- 想创建或更新法人实体：当前结构化命令未实现，改走 [../../contract-cli-api-call/SKILL.md](../../contract-cli-api-call/SKILL.md)
+- 想创建或更新法人实体：当前结构化命令未实现，明确说明暂未覆盖；不要退回 `api call`
 - 想先确认法人实体字段定义：改看 [../../contract-cli-mdm-fields/SKILL.md](../../contract-cli-mdm-fields/SKILL.md)
 - 想查合同我方主体选择逻辑：回到 [../../contract-cli-contract/SKILL.md](../../contract-cli-contract/SKILL.md)

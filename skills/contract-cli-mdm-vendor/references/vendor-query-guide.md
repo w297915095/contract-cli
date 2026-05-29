@@ -16,8 +16,8 @@
 当前结构化命令只有两类：
 
 ```bash
-contract-cli mdm vendor list --profile contract-group --name "供应商A"
-contract-cli mdm vendor get 1063197165850985296 --profile contract-group
+contract-cli mdm vendor list --profile contract --name "供应商A"
+contract-cli mdm vendor get 1063197165850985296 --profile contract
 ```
 
 硬约束：
@@ -41,7 +41,7 @@ contract-cli mdm vendor get 1063197165850985296 --profile contract-group
 最小命令：
 
 ```bash
-contract-cli mdm vendor list --profile contract-group --name "供应商A"
+contract-cli mdm vendor list --profile contract --name "供应商A"
 ```
 
 常见追加参数：
@@ -66,19 +66,19 @@ contract-cli mdm vendor list --profile contract-group --name "供应商A"
 最小命令：
 
 ```bash
-contract-cli mdm vendor list --profile contract-group --page-size 20
+contract-cli mdm vendor list --profile contract --page-size 20
 ```
 
 翻页示例：
 
 ```bash
-contract-cli mdm vendor list --profile contract-group --page-size 20 --page-token next
+contract-cli mdm vendor list --profile contract --page-size 20 --page-token next
 ```
 
 bot 示例：
 
 ```bash
-contract-cli mdm vendor list --profile contract-group --as bot --name "V00000001" --page-size 20 --user-id-type employee_id
+contract-cli mdm vendor list --profile contract --as bot --name "V00000001" --page-size 20 --user-id-type employee_id
 ```
 
 ### 2.3 已知 id 直接查详情
@@ -90,13 +90,13 @@ contract-cli mdm vendor list --profile contract-group --as bot --name "V00000001
 最小命令：
 
 ```bash
-contract-cli mdm vendor get 1063197165850985296 --profile contract-group
+contract-cli mdm vendor get 1063197165850985296 --profile contract
 ```
 
 bot 示例：
 
 ```bash
-contract-cli mdm vendor get 7003410079584092448 --profile contract-group --as bot --user-id-type employee_id
+contract-cli mdm vendor get 7003410079584092448 --profile contract --as bot --user-id-type employee_id
 ```
 
 补充说明：
@@ -108,6 +108,6 @@ contract-cli mdm vendor get 7003410079584092448 --profile contract-group --as bo
 
 ## 3. 什么时候不要走这里
 
-- 想创建或更新交易方：当前结构化命令未实现，改走 [../../contract-cli-api-call/SKILL.md](../../contract-cli-api-call/SKILL.md)
+- 想创建或更新交易方：当前结构化命令未实现，明确说明暂未覆盖；不要退回 `api call`
 - 想先确认交易方字段定义：改看 [../../contract-cli-mdm-fields/SKILL.md](../../contract-cli-mdm-fields/SKILL.md)
 - 想查合同主体选择逻辑：回到 [../../contract-cli-contract/SKILL.md](../../contract-cli-contract/SKILL.md)

@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"cn.qfei/contract-cli/internal/build"
 )
 
 type skillMetadata struct {
@@ -18,6 +20,10 @@ type skillMetadata struct {
 	Name        string
 	Version     string
 	Description string
+}
+
+var hiddenBundledSkillDirs = map[string]struct{}{
+	"contract-cli-api-call": {},
 }
 
 func (a *App) runSkills(_ context.Context, args []string) error {
@@ -50,8 +56,9 @@ func (a *App) runSkillsList(args []string) error {
 	}
 
 	_, _ = fmt.Fprintln(a.stdout, "Built-in skills:")
+	cliVersion := build.Current().Version
 	for _, skill := range skills {
-		_, _ = fmt.Fprintf(a.stdout, "%s\t%s\t%s\n", skill.Name, skill.Version, skill.Description)
+		_, _ = fmt.Fprintf(a.stdout, "%s\t%s\t%s\n", skill.Name, cliVersion, skill.Description)
 	}
 	return nil
 }
@@ -152,6 +159,9 @@ func loadBundledSkills(source fs.FS) ([]skillMetadata, error) {
 			continue
 		}
 		dir := entry.Name()
+		if isHiddenBundledSkill(dir) {
+			continue
+		}
 		content, err := fs.ReadFile(source, path.Join(dir, "SKILL.md"))
 		if err != nil {
 			continue
@@ -167,6 +177,11 @@ func loadBundledSkills(source fs.FS) ([]skillMetadata, error) {
 		return skills[i].Name < skills[j].Name
 	})
 	return skills, nil
+}
+
+func isHiddenBundledSkill(dir string) bool {
+	_, hidden := hiddenBundledSkillDirs[dir]
+	return hidden
 }
 
 func parseSkillMetadata(dir string, content string) skillMetadata {

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,9 +18,10 @@ func TestHelpRequestsRenderExpectedTopics(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name     string
-		args     []string
-		contains []string
+		name        string
+		args        []string
+		contains    []string
+		notContains []string
 	}{
 		{
 			name: "top level help flag",
@@ -46,7 +46,7 @@ func TestHelpRequestsRenderExpectedTopics(t *testing.T) {
 				"contract-cli contract upload-file --file <path> --file-type <type> [flags]",
 				"--file <path>",
 				"--file-type <type>",
-				"bot-only",
+				"user/bot",
 				"200MB",
 				"不接受 --input-file / --data",
 			},
@@ -58,6 +58,27 @@ func TestHelpRequestsRenderExpectedTopics(t *testing.T) {
 				"contract upload-file",
 				"--file-name <name>",
 				"multipart/form-data",
+			},
+		},
+		{
+			name: "contract download file help",
+			args: []string{"contract", "download-file", "--help"},
+			contains: []string{
+				"contract download-file",
+				"--output-file <path>",
+				"--force",
+				"默认拉起保存文件弹窗",
+				"bot-only",
+			},
+		},
+		{
+			name: "contract patch help",
+			args: []string{"contract", "patch", "--help"},
+			contains: []string{
+				"contract patch",
+				"contract-cli contract patch <contract-id> --input-file <path>|--data <json> [flags]",
+				"PATCH /open-apis/contract/v1/contracts/{contract_id}",
+				"bot-only",
 			},
 		},
 		{
@@ -91,16 +112,6 @@ func TestHelpRequestsRenderExpectedTopics(t *testing.T) {
 			},
 		},
 		{
-			name: "api call path constraint",
-			args: []string{"api", "call", "--help"},
-			contains: []string{
-				"api call",
-				"contract-cli api call <METHOD> <PATH> [flags]",
-				"--header \"Key: Value\"",
-				"/open-apis/",
-			},
-		},
-		{
 			name: "mdm vendor list flags",
 			args: []string{"mdm", "vendor", "list", "--help"},
 			contains: []string{
@@ -118,6 +129,34 @@ func TestHelpRequestsRenderExpectedTopics(t *testing.T) {
 				"--timeout <duration>",
 				"--app-id <id>",
 				"--app-secret <secret>",
+			},
+		},
+		{
+			name: "config add production defaults",
+			args: []string{"config", "add", "--help"},
+			contains: []string{
+				"config add",
+				"--env <prod>",
+				"默认 prod",
+				"--name <profile>",
+				"默认 contract",
+				"contract-cli config add --env prod --name contract",
+			},
+			notContains: []string{
+				"dev",
+			},
+		},
+		{
+			name: "update check production example",
+			args: []string{"update", "check", "--help"},
+			contains: []string{
+				"update check",
+				"--channel <latest|beta>",
+				"--json",
+				"contract-cli update check --channel latest --json",
+			},
+			notContains: []string{
+				"contract-cli update check --channel beta",
 			},
 		},
 		{
@@ -151,6 +190,11 @@ func TestHelpRequestsRenderExpectedTopics(t *testing.T) {
 					t.Fatalf("help output missing %q:\n%s", want, stdout.String())
 				}
 			}
+			for _, forbidden := range tc.notContains {
+				if strings.Contains(stdout.String(), forbidden) {
+					t.Fatalf("help output should not contain %q:\n%s", forbidden, stdout.String())
+				}
+			}
 		})
 	}
 }
@@ -168,7 +212,6 @@ func TestHelpDoesNotTriggerProfilesHTTPUpdateOrLogs(t *testing.T) {
 		Store:                store,
 		UpdateRegistryURL:    "https://registry.test/@qfeius%2fcontract-cli",
 		UpdateCurrentVersion: "0.1.0-beta.1",
-		IsTerminal:           func(io.Writer) bool { return true },
 		HTTPClient: &http.Client{
 			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				requests++
@@ -211,8 +254,6 @@ func TestAllCurrentHelpTopicsRender(t *testing.T) {
 		"skills install",
 		"update",
 		"update check",
-		"api",
-		"api call",
 		"contract",
 		"contract search",
 		"contract get",
@@ -220,6 +261,17 @@ func TestAllCurrentHelpTopicsRender(t *testing.T) {
 		"contract text",
 		"contract create",
 		"contract upload-file",
+		"contract submit",
+		"contract resubmit",
+		"contract patch",
+		"contract download-file",
+		"contract delete",
+		"contract print-file",
+		"contract share",
+		"contract share get",
+		"contract cooperation",
+		"contract cooperation link get",
+		"contract cooperation record get",
 		"contract category",
 		"contract category list",
 		"contract template",
@@ -275,6 +327,10 @@ func TestUnknownHelpTopicReturnsClearError(t *testing.T) {
 		{
 			args:    []string{"contract", "unknown", "--help"},
 			wantErr: `unknown help topic "contract unknown"`,
+		},
+		{
+			args:    []string{"help", "api", "call"},
+			wantErr: `unknown help topic "api call"`,
 		},
 	}
 

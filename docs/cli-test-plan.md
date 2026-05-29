@@ -8,7 +8,7 @@
 - 验证 profile 初始化、user OAuth、bot token、登出、默认身份切换等鉴权流程。
 - 验证 bot 身份下当前已接入的全部结构化业务命令。
 - 验证 user 身份下当前已接入的全部结构化业务命令。
-- 验证 `api call`、输出格式、通用 Agent skills 安装、CLI 内置 skills 兜底安装、异常拦截等补充能力。
+- 验证输出格式、通用 Agent skills 安装、CLI 内置 skills 兜底安装、`api call` 暂未开放拦截等补充能力。
 
 ## 2. 测试环境准备
 
@@ -37,7 +37,7 @@ macOS/Linux 使用 tar，Windows 使用 PowerShell Expand-Archive
 
 ```bash
 export CONTRACT_CLI_CONFIG_DIR="$(mktemp -d)"
-export PROFILE="contract-group"
+export PROFILE="contract"
 ```
 
 后续命令都显式带：
@@ -54,7 +54,7 @@ rm -rf "$CONTRACT_CLI_CONFIG_DIR"
 
 ### 2.3 测试数据清单
 
-业务命令需要准备一组 dev 环境可访问的数据：
+业务命令需要准备一组目标租户可访问的数据：
 
 | 变量 | 含义 | 示例 |
 | --- | --- | --- |
@@ -110,7 +110,7 @@ Built-in skills:
 | 检查项 | 预期 |
 | --- | --- |
 | npm install | 成功，无 404、无 postinstall 失败 |
-| `npx skills add qfeius/contract-cli -y -g` | 成功安装 7 个 skills，并输出对应 Agent 平台适配信息 |
+| `npx skills add qfeius/contract-cli -y -g` | 成功安装 6 个已开放 skills，并输出对应 Agent 平台适配信息 |
 | `contract-cli --version` | 输出版本号、commit、build date |
 | `contract-cli skills list` | 输出 `auth`、`contract-cli-contract`、`contract-cli-mdm-vendor` 等内置 skill |
 
@@ -182,8 +182,8 @@ npx skills add qfeius/contract-cli -y -g
 预期结果：
 
 - 输出 `Installation complete`。
-- 输出 `Installed 7 skills`。
-- 至少包含 `auth`、`contract-cli-api-call`、`contract-cli-contract`、`contract-cli-mdm-fields`、`contract-cli-mdm-legal`、`contract-cli-mdm-vendor`、`contract-cli-shared`。
+- 输出 `Installed 6 skills`。
+- 至少包含 `auth`、`contract-cli-contract`、`contract-cli-mdm-fields`、`contract-cli-mdm-legal`、`contract-cli-mdm-vendor`、`contract-cli-shared`。
 - 输出中能看到 `universal` 或 `symlinked` 的平台适配信息；具体平台列表以 installer 实际输出为准。
 
 注意事项：
@@ -209,7 +209,6 @@ Installed skill: contract-cli-contract
 Installed skill: contract-cli-mdm-vendor
 Installed skill: contract-cli-mdm-legal
 Installed skill: contract-cli-mdm-fields
-Installed skill: contract-cli-api-call
 Installed skill: contract-cli-shared
 ```
 
@@ -227,28 +226,30 @@ contract-cli skills install --target "$SKILLS_TARGET" --force
 
 ```bash
 contract-cli update check --channel beta
+contract-cli update check --channel beta --json
 ```
 
 预期结果：
 
 | 场景 | 预期 |
 | --- | --- |
-| 远端 beta 比本地新 | 输出 `A new contract-cli version is available` 和 `npm install -g @qfeius/contract-cli@beta --registry https://registry.npmjs.org` |
-| 远端 beta 与本地一致 | 输出 `contract-cli is up to date` |
-| 本地是源码 `dev` 或 git hash 构建 | 输出 `Update check skipped` |
+| 远端 beta 比本地新 | 默认输出文本；带 `--json` 时 `action=update_available`，并带 `command` |
+| 远端 beta 与本地一致 | 默认输出文本；带 `--json` 时 `action=already_up_to_date`，不带 `_notice.update` |
+| 本地是源码 `dev` 或 git hash 构建 | 默认输出跳过文本；带 `--json` 时 `action=skipped`，不访问 npm registry |
 
 自动提示检查：
 
 ```bash
-contract-cli skills list
-contract-cli skills list
+contract-cli contract get <contract-id> --profile "$PROFILE" --output json
+contract-cli contract get <contract-id> --profile "$PROFILE" --output json
 ```
 
 预期结果：
 
-- 在交互终端下，第一次普通命令最多触发一次远端版本检查。
-- 第二次普通命令如果距离上次检查未超过 30 分钟，不应再次访问远端，也不应重复提示。
-- 网络失败时原命令仍然继续执行，不应因为版本检查失败而退出；失败检查也应按 30 分钟缓存，避免每条命令都重试。
+- 第一次符合条件的普通命令会触发远端版本检查，并把结果写入 `update-check.json`。
+- 发现新版本时，JSON object 输出包含 `_notice.update`，stderr 不输出旧版升级文本。
+- 24 小时内第二次普通命令命中 fresh cache，不再次请求 npm registry，但 JSON object 仍可从缓存注入 `_notice.update`。
+- 网络失败时原命令仍然继续执行，不应因为版本检查失败而退出；连续两次普通命令应各自尝试一次远端检查。
 
 关闭自动检查：
 
@@ -266,13 +267,13 @@ CONTRACT_CLI_NO_UPDATE_CHECK=1 contract-cli skills list
 ### 4.1 初始化 profile
 
 ```bash
-contract-cli config add --env dev --name "$PROFILE"
+contract-cli config add --env prod --name "$PROFILE"
 ```
 
 预期结果：
 
-- 写入 dev 环境配置。
-- 写入开放平台基址 `https://dev-open.qtech.cn`。
+- 写入 prod 环境配置。
+- 写入开放平台基址 `https://open.qfei.cn`。
 - 写入 user OAuth 配置。
 - 写入 bot token endpoint。
 - 当前 profile 被设置为 `$PROFILE`。
@@ -324,7 +325,7 @@ contract-cli auth login --profile "$PROFILE" --as bot --app-id "$CONTRACT_CLI_BO
 
 预期结果：
 
-- CLI 调用 `https://dev-open.qtech.cn/open-apis/auth/v3/tenant_access_token/internal`。
+- CLI 调用 `https://open.qfei.cn/open-apis/auth/v3/tenant_access_token/internal`。
 - 请求体使用 `appId/appSecret`。
 - 成功后保存 bot token。
 - 默认身份切换为 `bot`。
@@ -341,10 +342,11 @@ contract-cli auth status --profile "$PROFILE" --as bot
 ```text
 Identity: bot
 Authorization: authorized
-Token Endpoint: https://dev-open.qtech.cn/open-apis/auth/v3/tenant_access_token/internal
 Token Protocol: tenant_access_token/internal
 Expires At:
 ```
+
+状态输出不展示开放平台地址、授权端点或 bot token endpoint。
 
 ### 4.4 默认身份切换
 
@@ -409,7 +411,7 @@ Authorization: configured
 
 | 场景 | 命令 | 预期 |
 | --- | --- | --- |
-| 旧 profile 缺少 bot endpoint | `auth login --as bot` | 报错并提示重跑 `config add --env dev --name <profile>` |
+| 旧 profile 缺少 bot endpoint | `auth login --as bot` | 报错并提示重跑 `config add --env prod --name <profile>` |
 | bot appSecret 错误 | `auth login --as bot` | 保留新凭证，bot token 为空，默认身份不切到 bot |
 | user 未登录调用 user-only 命令 | `contract enum list --as user` | 报未授权或 token 不可用 |
 | bot token 已清空后调用 bot 命令 | `contract get --as bot` | 报未授权或 token 不可用 |
@@ -430,7 +432,7 @@ contract-cli auth status --profile "$PROFILE" --as bot
 | 身份 | 显式 `--as bot` 或默认身份为 bot |
 | 路径 | 不走 `/open-apis/contract/v1/mcp/...`，除非命令特殊说明 |
 | 输出 | 默认 JSON，可使用 `--output json` 显式校验 |
-| 通用 query | `--user-id`、`--user-id-type` 传了就透传，不传就不带 |
+| 通用 query | `--user-id-type` 不传默认 `user_id`，显式传值则覆盖；`--user-id` 传了就透传，不传就不带 |
 | token | 使用 tenant access token |
 
 ### 5.1 合同搜索
@@ -500,7 +502,7 @@ POST /open-apis/contract/v1/contracts/{contract_id}/text
 
 ### 5.5 创建合同
 
-创建合同是写操作，建议优先在 dev 环境使用明确可回收的测试数据。
+创建合同是写操作，建议优先在可回收的测试租户中使用明确可回收的测试数据。
 
 ```bash
 cat > /tmp/contract-create-bot.json <<'JSON'
@@ -624,6 +626,7 @@ printf '%s\n' '%PDF-1.4 contract-cli upload smoke' > /tmp/contract-upload.pdf
 
 ```bash
 contract-cli contract upload-file --profile "$PROFILE" --as bot --file /tmp/contract-upload.pdf --file-type attachment --file-name contract-upload.pdf --output json
+contract-cli contract upload-file --profile "$PROFILE" --as user --file /tmp/contract-upload.pdf --file-type attachment --file-name contract-upload.pdf --output json
 contract-cli contract upload-file --profile "$PROFILE" --as bot --file /tmp/contract-upload.pdf --file-type attachment --raw
 ```
 
@@ -638,8 +641,109 @@ POST /open-apis/contract/v1/files/upload
 - 请求是 `multipart/form-data`。
 - 表单字段包含 `file_name`、`file_type`、`file`。
 - 响应 JSON 中应包含后端返回的 `data.file_id`。
-- profile 默认身份是 user 或显式 `--as user` 时，CLI 应在发 HTTP 前报错。
+- `--as user` 与 `--as bot` 均使用同一个上传接口，Authorization 使用对应身份的 token。
 - 超过 `200MB`、目录路径、文件不存在、缺少 `--file`、缺少 `--file-type` 都应报明确错误。
+
+### 5.10.1 bot-only 合同提交、重提、更新与删除
+
+```bash
+contract-cli contract submit "$CONTRACT_ID" --profile "$PROFILE" --as bot --output json
+contract-cli contract submit "$CONTRACT_ID" --profile "$PROFILE" --as bot --data '{"comment":"contract-cli smoke submit"}' --output json
+contract-cli contract resubmit "$CONTRACT_ID" --profile "$PROFILE" --as bot --output json
+contract-cli contract resubmit "$CONTRACT_ID" --profile "$PROFILE" --as bot --data '{"comment":"contract-cli smoke resubmit"}' --output json
+```
+
+更新合同需要准备 JSON 请求体：
+
+```bash
+cat > /tmp/contract-patch-bot.json <<'JSON'
+{
+  "contract_name": "contract-cli bot patch smoke"
+}
+JSON
+
+contract-cli contract patch "$CONTRACT_ID" --profile "$PROFILE" --as bot --input-file /tmp/contract-patch-bot.json --output json
+```
+
+删除草稿合同是破坏性操作，只能对明确可回收的测试草稿合同执行：
+
+```bash
+contract-cli contract delete "$DRAFT_CONTRACT_ID" --profile "$PROFILE" --as bot --output json
+```
+
+预期底层接口：
+
+```text
+POST /open-apis/contract/v1/contracts/{contract_id}/submit
+POST /open-apis/contract/v1/contracts/{contract_id}/resubmit
+PATCH /open-apis/contract/v1/contracts/{contract_id}
+DELETE /open-apis/contract/v1/contracts/{contract_id}
+```
+
+检查点：
+
+- 四个命令当前都仅支持 bot 身份，显式 `--as user` 应在发 HTTP 前失败。
+- `submit` / `resubmit` 的 `--input-file` / `--data` 可选，不传时不发送请求体。
+- `patch` 的 `--input-file` / `--data` 必须传一个且互斥。
+- `delete` 不要求 `--yes`，执行前由测试者自行确认目标是草稿合同。
+
+### 5.10.2 bot-only 下载与生成打印文件
+
+下载文件建议显式指定保存路径，避免默认保存弹窗在 Agent、SSH 或 CI 环境不可用：
+
+```bash
+contract-cli contract download-file "$FILE_ID" --profile "$PROFILE" --as bot --output-file /tmp/contract-download.pdf
+contract-cli contract download-file "$FILE_ID" --profile "$PROFILE" --as bot --output-file /tmp/contract-download.pdf --force
+contract-cli contract download-file "$FILE_ID" --profile "$PROFILE" --as bot --raw > /tmp/contract-download.raw
+```
+
+生成打印文件需要准备 JSON 请求体：
+
+```bash
+cat > /tmp/contract-print-file-bot.json <<'JSON'
+{
+  "contract_id": "REPLACE_WITH_CONTRACT_ID"
+}
+JSON
+
+contract-cli contract print-file --profile "$PROFILE" --as bot --input-file /tmp/contract-print-file-bot.json --output json
+```
+
+预期底层接口：
+
+```text
+GET /open-apis/contract/v1/files/{file_id}
+POST /open-apis/contract/v1/files
+```
+
+检查点：
+
+- `download-file` 当前仅支持 bot 身份，不支持 `dowload-file` 拼写。
+- 不传 `--output-file` 且不传 `--raw` 时，CLI 默认拉起保存文件弹窗。
+- 无 GUI、远程、CI、Agent 环境下，保存弹窗失败时不应发 HTTP，并提示改用 `--output-file`。
+- `--output-file` 文件已存在时默认失败，加 `--force` 才覆盖。
+- `print-file` 的 `--input-file` / `--data` 必须传一个且互斥。
+
+### 5.10.3 bot-only 分享记录与协商信息
+
+```bash
+contract-cli contract share get "$CONTRACT_ID" --profile "$PROFILE" --as bot --output json
+contract-cli contract cooperation link get "$CONTRACT_ID" --profile "$PROFILE" --as bot --output json
+contract-cli contract cooperation record get "$CONTRACT_ID" --profile "$PROFILE" --as bot --output json
+```
+
+预期底层接口：
+
+```text
+GET /open-apis/contract/v1/contracts/{contract_id}/share_records
+GET /open-apis/contract/v1/contracts/{contract_id}/cooperation_link
+GET /open-apis/contract/v1/contracts/{contract_id}/cooperation_record_info
+```
+
+检查点：
+
+- 三个命令当前都仅支持 bot 身份。
+- 响应保持后端 JSON envelope，不做 CLI 侧结构归一化。
 
 ### 5.11 交易方列表
 
@@ -704,7 +808,6 @@ GET /open-apis/mdm/v1/legal_entities/{legal_entity_id}
 ```bash
 contract-cli mdm fields list --profile "$PROFILE" --as bot --biz-line vendor --output json
 contract-cli mdm fields list --profile "$PROFILE" --as bot --biz-line legal_entity --output json
-contract-cli mdm fields list --profile "$PROFILE" --as bot --biz-line vendor_risk --output json
 ```
 
 预期底层接口：
@@ -712,6 +815,11 @@ contract-cli mdm fields list --profile "$PROFILE" --as bot --biz-line vendor_ris
 ```text
 GET /open-apis/mdm/v1/config/config_list
 ```
+
+检查点：
+
+- `legal_entity` 会在 bot 路由下映射为 query `biz_line=legalEntity`。
+- `vendor_risk` 当前不支持 bot，执行 `--as bot --biz-line vendor_risk` 应在本地报错且不发 HTTP。
 
 ### 5.16 bot 不支持命令的负向验证
 
@@ -819,7 +927,7 @@ GET /open-apis/contract/v1/mcp/contracts/{contract_id}/text
 
 ### 6.5 创建合同
 
-创建合同是写操作，建议在 dev 环境使用可回收测试数据。
+创建合同是写操作，建议在可回收的测试租户中使用可回收测试数据。
 
 ```bash
 cat > /tmp/contract-create-user.json <<'JSON'
@@ -981,50 +1089,42 @@ contract-cli mdm fields list --profile "$PROFILE" --as user --biz-line vendor_ri
 GET /open-apis/contract/v1/mcp/config/config_list
 ```
 
-## 7. api call 兜底测试
+## 7. api call 暂未开放拦截测试
 
-### 7.1 user MCP 路径
+### 7.1 命令入口拦截
 
 ```bash
-contract-cli api call GET /open-apis/contract/v1/mcp/config/config_list --profile "$PROFILE" --as user --output json --raw
+contract-cli api call GET /open-apis/contract/v1/mcp/config/config_list --profile "$PROFILE" --as user
 ```
 
 预期结果：
 
-- user 身份成功。
-- 返回原始响应 envelope。
+- 直接报错：`api call 暂未开放使用，请使用已开放的结构化命令`。
+- 不读取 profile，不发 HTTP 请求。
 
-### 7.2 bot 调用非 MCP 路径
+### 7.2 帮助入口不暴露
 
 ```bash
-contract-cli api call GET /open-apis/mdm/v1/config/config_list --profile "$PROFILE" --as bot --user-id "$USER_ID" --user-id-type "$USER_ID_TYPE" --output json --raw
+contract-cli --help
+contract-cli help api call
 ```
 
 预期结果：
 
-- bot 身份成功。
-- `--user-id` 与 `--user-id-type` 被拼到 query。
+- `contract-cli --help` 不展示 `contract-cli api call`。
+- `contract-cli help api call` 返回 `unknown help topic`。
 
-### 7.3 bot 禁止调用 MCP 路径
+### 7.3 skills 入口不暴露
 
 ```bash
-contract-cli api call GET /open-apis/contract/v1/mcp/config/config_list --profile "$PROFILE" --as bot
+contract-cli skills list
+contract-cli skills install --target "$SKILLS_TARGET"
 ```
 
 预期结果：
 
-- CLI 本地直接报错。
-- 不应发出 HTTP 请求。
-
-### 7.4 非法路径
-
-```bash
-contract-cli api call GET https://dev-open.qtech.cn/open-apis/mdm/v1/config/config_list --profile "$PROFILE" --as bot
-```
-
-预期结果：
-
-- 报错：开放平台路径必须是相对 `/open-apis/...` 路径。
+- `skills list` 不展示 `contract-cli-api-call`。
+- `skills install` 不安装 `contract-cli-api-call`。
 
 ## 8. 输出格式与参数解析测试
 
@@ -1151,7 +1251,7 @@ npm publish --dry-run --tag beta
 ### 10.4 每次改命令参数后必须覆盖
 
 - `--input-file` 与 `--data` 互斥。
-- `--user-id` 与 `--user-id-type` 透传到 query。
+- `--user-id-type` 默认 `user_id` 且可被显式传值覆盖；`--user-id` 透传到 query。
 - `--output json|yaml|table` 可用。
 - `--raw` 可用。
 - 未知参数报错。
@@ -1175,12 +1275,12 @@ npm publish --dry-run --tag beta
 
 - CLI 可以通过 npm beta 包安装并执行 `contract-cli --version`。
 - `contract-cli skills list` 和 `contract-cli skills install` 成功。
-- `config add --env dev` 成功。
+- `config add --env prod` 成功。
 - user 登录、状态、切换、登出成功。
 - bot 登录、状态、切换、登出成功，且 bot logout 保留凭证。
-- bot 身份下第 5 节结构化业务命令和 `contract upload-file` 完成正向验证，写操作至少在 dev 环境完成一次可回收数据验证。
+- bot 身份下第 5 节结构化业务命令完成正向验证，`contract upload-file` 需覆盖 user/bot 两种身份；写操作至少在可回收测试租户完成一次可回收数据验证。
 - user 身份下第 6 节十五条结构化业务命令完成正向验证。
-- `api call` 的 user MCP、bot open API、bot MCP 拦截、非法路径四类场景完成验证。
+- `api call` 暂未开放拦截、help 隐藏、skills 隐藏三类场景完成验证。
 - `make release-check` 通过。
 
 ## 13. 版本升级专项测试
@@ -1193,32 +1293,39 @@ npm publish --dry-run --tag beta
 contract-cli update check
 contract-cli update check --channel beta
 contract-cli update check --channel latest
+contract-cli update check --channel latest --json
 ```
 
 预期结果：
 
 - 当前版本是预发布版本时，不传 `--channel` 默认检查 npm `beta` dist-tag。
 - 当前版本是稳定版本时，不传 `--channel` 默认检查 npm `latest` dist-tag。
-- 远端版本更新时，输出 `A new contract-cli version is available`。
-- 输出升级命令：`npm install -g @qfeius/contract-cli@<channel> --registry https://registry.npmjs.org`。
-- 远端版本未更新时，输出 `contract-cli is up to date`。
-- 本地是 `dev`、`unknown` 或非语义化版本时，输出 `Update check skipped`。
+- 不带 `--json` 时输出文本提示，和飞书 `lark-cli update --check` 保持一致。
+- 带 `--json` 时输出飞书式顶层字段：`ok`、`previous_version`、`current_version`、`latest_version`、`action`、`message`。
+- 远端版本更新时，`action=update_available`，并带 `command`。
+- `command` 为 `npm install -g @qfeius/contract-cli@<channel> --registry https://registry.npmjs.org`。
+- 远端版本未更新时，`action=already_up_to_date`。
+- 本地是 `dev`、`unknown` 或非语义化版本时，`action=skipped`。
+- 手动 `update check --json` 不注入 `_notice.update`。
 
 ### 13.2 自动升级提示
 
-在交互终端下执行任意普通命令：
+执行会返回 JSON object 的普通命令：
 
 ```bash
-contract-cli skills list
-contract-cli auth status --profile "$PROFILE"
+contract-cli contract get <contract-id> --profile "$PROFILE" --output json
+contract-cli contract search --profile "$PROFILE" --data '{}'
 ```
 
 预期结果：
 
-- 普通命令执行前最多触发一次自动版本检查。
-- 自动检查间隔为 `30` 分钟，同版本同 channel 在缓存有效期内不重复请求 npm registry。
-- 检查失败不阻断原命令；失败结果也会缓存，避免每条命令都重试。
+- cache 缺失、channel 不匹配或超过 24 小时时，会触发一次远端版本检查。
+- fresh cache 24 小时内不再请求 npm registry。
+- 发现新版本时，JSON object 输出注入 `_notice.update`；stderr 不输出旧版升级文本。
+- `--raw`、yaml、table、纯文本命令不注入 `_notice.update`。
+- 检查失败不阻断原命令；失败结果不写入缓存，下一次普通命令会再次尝试检查。
 - `contract-cli version`、`contract-cli update check` 自身不触发自动检查。
+- CI 环境跳过自动远端检查。
 
 关闭自动检查：
 
@@ -1260,7 +1367,7 @@ npx skills add qfeius/contract-cli -y -g
 预期结果：
 
 - 输出 `Installation complete`。
-- 输出 `Installed 7 skills`。
+- 输出 `Installed 6 skills`。
 - 安装内容至少包含：
   - `auth`
   - `contract-cli-api-call`
@@ -1294,9 +1401,9 @@ contract-cli skills install --force
 - 通用 installer 依赖 GitHub 仓库内容，因此发版前要确认 skill 文档已经 push。
 - CLI 内置安装依赖 npm 包或二进制内嵌内容，因此发布前要跑 `make release-check`。
 
-## 15. bot 文件上传命令专项测试
+## 15. 文件上传命令专项测试
 
-本模块覆盖今天新增的 `contract-cli contract upload-file`。当前仅支持 bot 身份，user/MCP 三段式上传不在本期范围内。
+本模块覆盖 `contract-cli contract upload-file`。当前 user/bot 身份均支持，调用同一个开放平台上传接口。
 
 ### 15.1 正向上传
 
@@ -1310,6 +1417,7 @@ printf '%s\n' '%PDF-1.4 contract-cli upload smoke' > /tmp/contract-upload.pdf
 
 ```bash
 contract-cli contract upload-file --profile "$PROFILE" --as bot --file /tmp/contract-upload.pdf --file-type attachment --file-name contract-upload.pdf --output json
+contract-cli contract upload-file --profile "$PROFILE" --as user --file /tmp/contract-upload.pdf --file-type attachment --file-name contract-upload.pdf --output json
 contract-cli contract upload-file --profile "$PROFILE" --as bot --file /tmp/contract-upload.pdf --file-type attachment --raw
 ```
 
@@ -1321,7 +1429,7 @@ POST /open-apis/contract/v1/files/upload
 
 预期请求：
 
-- 使用 `Authorization: Bearer <bot-token>`。
+- 使用 `Authorization: Bearer <user-token>` 或 `Authorization: Bearer <bot-token>`，取决于 `--as` 或 profile 默认身份。
 - 使用 `multipart/form-data`。
 - 表单字段包含 `file_name`、`file_type`、`file`。
 - `--file-name` 不传时默认使用 `filepath.Base(--file)`。
@@ -1332,10 +1440,9 @@ POST /open-apis/contract/v1/files/upload
 - 后端返回原始 JSON envelope。
 - 成功时重点检查 `data.file_id`。
 
-### 15.2 参数与身份负向测试
+### 15.2 参数负向测试
 
 ```bash
-contract-cli contract upload-file --profile "$PROFILE" --as user --file /tmp/contract-upload.pdf --file-type attachment
 contract-cli contract upload-file --profile "$PROFILE" --as bot --file /tmp/contract-upload.pdf
 contract-cli contract upload-file --profile "$PROFILE" --as bot --file-type attachment
 contract-cli contract upload-file --profile "$PROFILE" --as bot --file /tmp --file-type attachment
@@ -1344,7 +1451,6 @@ contract-cli contract upload-file --profile "$PROFILE" --as bot --file /tmp/cont
 
 预期结果：
 
-- `--as user` 或 profile 默认身份为 user 时，在发 HTTP 前失败。
 - 缺少 `--file` 报 `--file is required`。
 - 缺少 `--file-type` 报 `--file-type is required`。
 - 文件不存在、目录路径、超过 `200MB` 均报明确错误。
